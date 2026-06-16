@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any, Mapping
 
 import torch
 
 from .dataset import fetch_training_data, get_sizes
-from .models import TorchLearner, get_losses, load_model
+from .models import TorchLearner, cuda_available, get_losses, load_model
 from .runtime import (
     batch_size,
     dataset_path,
@@ -22,9 +23,23 @@ from .runtime import (
     save_torch,
     section,
     seed,
+    setup_logging,
     task_shape,
     to_plain_config,
 )
+
+
+LOGGER = logging.getLogger(__name__)
+
+
+def _cuda_summary() -> dict[str, Any]:
+    available = cuda_available()
+    summary: dict[str, Any] = {"cuda_available": available}
+    if available:
+        summary["cuda_device_count"] = torch.cuda.device_count()
+        summary["cuda_current_device"] = torch.cuda.current_device()
+        summary["cuda_device_name"] = torch.cuda.get_device_name(torch.cuda.current_device())
+    return summary
 
 
 def _fetch_loaders(config: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
@@ -151,6 +166,12 @@ def eval_stage(
             lr=float(training.get("lr", 1e-3)),
             device=device(config),
         )
+    LOGGER.info(
+        "Evaluation device selected: requested=%s resolved=%s %s",
+        device(config),
+        learner.device,
+        _cuda_summary(),
+    )
     evaluation = section(config, "evaluation")
     selected = evaluation.get("splits")
     if isinstance(selected, str):
@@ -189,6 +210,7 @@ def eval_stage(
 
 
 def main(config: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    setup_logging(section(to_plain_config(config or {}), "misc").get("log_level", "INFO"))
     return eval_stage(config or {})
 
 

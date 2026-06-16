@@ -7,13 +7,14 @@ from typing import Any, Mapping
 
 from .eval_model import eval_stage
 from .load_dataset import build_dataset_stage
-from .runtime import pretrained_path, rebuild_dataset, run_dir, save_json, section, to_plain_config
+from .runtime import pretrained_path, rebuild_dataset, run_dir, save_json, section, setup_logging, to_plain_config
 from .train_model import train_stage
 
 
 def run_experiment(config: Mapping[str, Any]) -> dict[str, Any]:
     """Run the configured TimeTensor experiment."""
     config = to_plain_config(config)
+    setup_logging(section(config, "misc").get("log_level", "INFO"))
     experiment = section(config, "experiment")
     results: dict[str, Any] = {}
     loaders = None

@@ -3,12 +3,23 @@
 from __future__ import annotations
 
 import json
+import logging
+import sys
 from pathlib import Path
 from typing import Any, Mapping
 
 import torch
 
 from .models import ModelConfig
+
+
+def setup_logging(level: str = "INFO") -> None:
+    logging.basicConfig(
+        level=getattr(logging, str(level).upper(), logging.INFO),
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+        stream=sys.stdout,
+        force=True,
+    )
 
 
 def to_plain_config(config: Any) -> dict[str, Any]:

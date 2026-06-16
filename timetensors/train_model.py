@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any, Mapping
 
 from .dataset import fetch_training_data, get_sizes
 from .load_dataset import build_dataset_stage
-from .models import TorchLearner, get_losses, load_model
+from .models import TorchLearner, cuda_available, get_losses, load_model
 from .runtime import (
     batch_size,
     dataset_path,
@@ -22,9 +23,25 @@ from .runtime import (
     save_torch,
     section,
     seed,
+    setup_logging,
     task_shape,
     to_plain_config,
 )
+
+
+LOGGER = logging.getLogger(__name__)
+
+
+def _cuda_summary() -> dict[str, Any]:
+    import torch
+
+    available = cuda_available()
+    summary: dict[str, Any] = {"cuda_available": available}
+    if available:
+        summary["cuda_device_count"] = torch.cuda.device_count()
+        summary["cuda_current_device"] = torch.cuda.current_device()
+        summary["cuda_device_name"] = torch.cuda.get_device_name(torch.cuda.current_device())
+    return summary
 
 
 def _fetch_loaders(config: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
@@ -79,6 +96,13 @@ def train_stage(
         optimizer_kwargs=training.get("optimizer_kwargs"),
         grad_clip=training.get("grad_clip"),
     )
+    requested_device = device(config)
+    LOGGER.info(
+        "Device selected: requested=%s resolved=%s %s",
+        requested_device,
+        learner.device,
+        _cuda_summary(),
+    )
     epochs = int(training.get("epochs", 1))
     trainable = any(param.requires_grad for param in learner.model.parameters())
     if epochs > 0 and trainable:
@@ -88,6 +112,7 @@ def train_stage(
             valid_loaders={key: value for key, value in loaders.items() if "valid" in key},
             eval_freq=training.get("eval_freq"),
             seed=seed(config),
+            logger=LOGGER,
         )
     else:
         history = {
@@ -112,6 +137,7 @@ def train_stage(
 
 
 def main(config: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    setup_logging(section(to_plain_config(config or {}), "misc").get("log_level", "INFO"))
     return train_stage(config or {})
 
 
