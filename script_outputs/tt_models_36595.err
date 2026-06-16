@@ -1,0 +1,45 @@
+/home/h61084/venvs/timetensors/lib/python3.12/site-packages/torch/cuda/__init__.py:187: UserWarning: CUDA initialization: The NVIDIA driver on your system is too old (found version 12080). Please update your GPU driver by downloading and installing a new version from the URL: http://www.nvidia.com/Download/index.aspx Alternatively, go to: https://pytorch.org to install a PyTorch version that has been compiled with your version of the CUDA driver. (Triggered internally at /pytorch/c10/cuda/CUDAFunctions.cpp:119.)
+  return torch._C._cuda_getDeviceCount() > 0
+/home/h61084/venvs/timetensors/lib/python3.12/site-packages/torch/cuda/__init__.py:187: UserWarning: CUDA initialization: The NVIDIA driver on your system is too old (found version 12080). Please update your GPU driver by downloading and installing a new version from the URL: http://www.nvidia.com/Download/index.aspx Alternatively, go to: https://pytorch.org to install a PyTorch version that has been compiled with your version of the CUDA driver. (Triggered internally at /pytorch/c10/cuda/CUDAFunctions.cpp:119.)
+  return torch._C._cuda_getDeviceCount() > 0
+/home/h61084/venvs/timetensors/lib/python3.12/site-packages/torch/cuda/__init__.py:187: UserWarning: CUDA initialization: The NVIDIA driver on your system is too old (found version 12080). Please update your GPU driver by downloading and installing a new version from the URL: http://www.nvidia.com/Download/index.aspx Alternatively, go to: https://pytorch.org to install a PyTorch version that has been compiled with your version of the CUDA driver. (Triggered internally at /pytorch/c10/cuda/CUDAFunctions.cpp:119.)
+  return torch._C._cuda_getDeviceCount() > 0
+/home/h61084/venvs/timetensors/lib/python3.12/site-packages/torch/cuda/__init__.py:187: UserWarning: CUDA initialization: The NVIDIA driver on your system is too old (found version 12080). Please update your GPU driver by downloading and installing a new version from the URL: http://www.nvidia.com/Download/index.aspx Alternatively, go to: https://pytorch.org to install a PyTorch version that has been compiled with your version of the CUDA driver. (Triggered internally at /pytorch/c10/cuda/CUDAFunctions.cpp:119.)
+  return torch._C._cuda_getDeviceCount() > 0
+Error executing job with overrides: ['+data.raw_path=../datasets/solar', '+data.path=../datasets/solar/solar', '+data.name=solar', '+task.lags=168', '+task.horizon=24', '+data.splits.date_splits=[0.6,0.2,0.2]', '+data.sampling.train_idx_mode=random', '+data.sampling.eval_idx_mode=all', '+data.sampling.eval_stride=256', '+training.bs=128', '+training.epochs=0', '+training.loss=MSE', '+model.name=persistence', '+model.path=persistence', '+normalization.name=instance', '+experiment.rebuild_dataset=true', '+output.dir=outputs/timetensor_models/solar/168_24', '+output.name=persistence']
+Traceback (most recent call last):
+  File "/home/h61084/codes/timetensors/timetensors/experiment.py", line 76, in _hydra_main
+    main(cfg)
+  File "/home/h61084/codes/timetensors/timetensors/experiment.py", line 63, in main
+    return run_experiment(config or {})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/h61084/codes/timetensors/timetensors/experiment.py", line 23, in run_experiment
+    dataset_result = build_dataset_stage(config)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/h61084/codes/timetensors/timetensors/load_dataset.py", line 41, in build_dataset_stage
+    build_dataset(
+  File "/home/h61084/codes/timetensors/timetensors/dataset/dataset.py", line 1245, in build_dataset
+    values_df, global_df, datetimes, metadata = fetch_csv(
+                                                ^^^^^^^^^^
+  File "/home/h61084/codes/timetensors/timetensors/dataset/dataset.py", line 1089, in fetch_csv
+    df = pd.read_csv(
+         ^^^^^^^^^^^^
+  File "/home/h61084/venvs/timetensors/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 873, in read_csv
+    return _read(filepath_or_buffer, kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/h61084/venvs/timetensors/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 300, in _read
+    parser = TextFileReader(filepath_or_buffer, **kwds)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/h61084/venvs/timetensors/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 1645, in __init__
+    self._engine = self._make_engine(f, self.engine)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/h61084/venvs/timetensors/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 1904, in _make_engine
+    self.handles = get_handle(
+                   ^^^^^^^^^^^
+  File "/home/h61084/venvs/timetensors/lib/python3.12/site-packages/pandas/io/common.py", line 930, in get_handle
+    handle = open(
+             ^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '../datasets/solar/solar.csv'
+
+Set the environment variable HYDRA_FULL_ERROR=1 for a complete stack trace.
+srun: error: dgx-h100-bis: task 0: Exited with exit code 1
