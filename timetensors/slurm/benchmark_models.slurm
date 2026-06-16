@@ -27,7 +27,7 @@ for dataset in "${DATASETS[@]}"; do
         epochs=0
       fi
       srun python -m timetensors.experiment \
-        +data.path="${DATA_ROOT}/${dataset}/${dataset}" \
+        +data.path="${DATA_ROOT}/${dataset}" \
         +task.lags="$L" \
         +task.horizon="$H" \
         +data.splits.date_splits=[0.6,0.2,0.2] \
@@ -42,7 +42,8 @@ for dataset in "${DATASETS[@]}"; do
         +normalization.name=instance \
         +experiment.skip_dataset_build=false \
         +output.dir="${OUT_ROOT}/${dataset}/${L}_${H}" \
-        +output.name="$model"
+        +output.name="$model" \
+        hydra.run.dir='outputs/hydra/${now:%Y-%m-%d}/${now:%H-%M-%S}'
     done
   done
 done

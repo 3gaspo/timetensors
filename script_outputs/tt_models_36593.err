@@ -1,0 +1,25 @@
+Error executing job with overrides: ['+data.path=../datasets/electricity', '+task.lags=168', '+task.horizon=24', '+data.splits.date_splits=[0.6,0.2,0.2]', '+data.sampling.train_idx_mode=random', '+data.sampling.eval_idx_mode=all', '+data.sampling.eval_stride=256', '+training.bs=128', '+training.epochs=0', '+training.loss=MSE', '+model.name=persistence', '+model.path=persistence', '+normalization.name=instance', '+experiment.skip_dataset_build=false', '+output.dir=outputs/timetensor_models/electricity/168_24', '+output.name=persistence']
+Traceback (most recent call last):
+  File "/home/h61084/codes/timetensors/timetensors/experiment.py", line 77, in _hydra_main
+    main(cfg)
+  File "/home/h61084/codes/timetensors/timetensors/experiment.py", line 64, in main
+    return run_experiment(config or {})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/h61084/codes/timetensors/timetensors/experiment.py", line 36, in run_experiment
+    train_result = train_stage(config, loaders=loaders, stats=stats)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/h61084/codes/timetensors/timetensors/train_model.py", line 61, in train_stage
+    loaders, stats = _fetch_loaders(config)
+                     ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/h61084/codes/timetensors/timetensors/train_model.py", line 32, in _fetch_loaders
+    return fetch_training_data(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/home/h61084/codes/timetensors/timetensors/dataset/dataset.py", line 2557, in fetch_training_data
+    data = load_data(data_path, legacy_context_kind=legacy_context_kind)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/h61084/codes/timetensors/timetensors/dataset/dataset.py", line 1296, in load_data
+    raise FileNotFoundError(path / f"{file_prefix}values.pt")
+FileNotFoundError: ../datasets/electricity/values.pt
+
+Set the environment variable HYDRA_FULL_ERROR=1 for a complete stack trace.
+srun: error: dgx-h100-bis: task 0: Exited with exit code 1

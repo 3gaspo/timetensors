@@ -1,0 +1,28 @@
+data:
+  path: ../datasets/electricity
+  splits:
+    date_splits:
+    - 0.6
+    - 0.2
+    - 0.2
+  sampling:
+    train_idx_mode: random
+    eval_idx_mode: all
+    eval_stride: 256
+task:
+  lags: 168
+  horizon: 24
+training:
+  bs: 128
+  epochs: 0
+  loss: MSE
+model:
+  name: persistence
+  path: persistence
+normalization:
+  name: instance
+experiment:
+  skip_dataset_build: false
+output:
+  dir: outputs/timetensor_models/electricity/168_24
+  name: persistence
