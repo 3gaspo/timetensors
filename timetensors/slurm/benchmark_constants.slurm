@@ -10,8 +10,8 @@ set -euo pipefail
 source .venv/bin/activate
 export PYTHONPATH="${PYTHONPATH:-}:$(pwd)"
 
-DATA_ROOT="${DATA_ROOT:-../datasets}"
-OUT_ROOT="${OUT_ROOT:-../outputs/timetensor_constants}"
+DATA_ROOT="../datasets"
+OUT_ROOT="outputs/timetensor_constants"
 DATASETS=("raw_electricity" "electricity" "traffic" "solar")
 SETTINGS=("168 24" "672 168")
 SEED="${SEED:-1}"
@@ -27,8 +27,8 @@ for dataset in "${DATASETS[@]}"; do
       [ "$policy" = "remove_eval" ] && rm_eval=true
       [ "$policy" = "remove_all" ] && rm_train=true && rm_eval=true
       [ "$policy" = "repeat_constant" ] && repeat=true
-      srun python -m timetensor.experiment \
-        +data.path="${DATA_ROOT}/${dataset}/run/${dataset}" \
+      srun python -m timetensors.experiment \
+        +data.path="${DATA_ROOT}/${dataset}/${dataset}" \
         +task.lags="$L" \
         +task.horizon="$H" \
         +data.splits.date_splits=[0.6,0.2,0.2] \
