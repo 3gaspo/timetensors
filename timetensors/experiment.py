@@ -7,7 +7,7 @@ from typing import Any, Mapping
 
 from .eval_model import eval_stage
 from .load_dataset import build_dataset_stage
-from .runtime import pretrained_path, run_dir, save_json, section, to_plain_config
+from .runtime import pretrained_path, rebuild_dataset, run_dir, save_json, section, to_plain_config
 from .train_model import train_stage
 
 
@@ -19,8 +19,7 @@ def run_experiment(config: Mapping[str, Any]) -> dict[str, Any]:
     loaders = None
     stats = None
 
-    should_build = bool(experiment.get("build_dataset", section(config, "data").get("rebuild", False)))
-    if not bool(experiment.get("skip_dataset_build", False)) and should_build:
+    if rebuild_dataset(config):
         dataset_result = build_dataset_stage(config)
         loaders = dataset_result.get("loaders")
         stats = dataset_result.get("stats")

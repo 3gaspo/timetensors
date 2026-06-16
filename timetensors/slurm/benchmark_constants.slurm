@@ -12,11 +12,14 @@ export PYTHONPATH="${PYTHONPATH:-}:$(pwd)"
 
 DATA_ROOT="../datasets"
 OUT_ROOT="outputs/timetensor_constants"
+REBUILD_DATASETS="${REBUILD_DATASETS:-true}"
 DATASETS=("raw_electricity" "electricity" "traffic" "solar")
 SETTINGS=("168 24" "672 168")
 SEED="${SEED:-1}"
 
 for dataset in "${DATASETS[@]}"; do
+  DATASET_DIR="${DATA_ROOT}/${dataset}/${dataset}"
+  rebuild_dataset="$REBUILD_DATASETS"
   for setting in "${SETTINGS[@]}"; do
     read -r L H <<< "$setting"
     for policy in keep remove_train remove_eval remove_all repeat_constant; do
@@ -28,7 +31,9 @@ for dataset in "${DATASETS[@]}"; do
       [ "$policy" = "remove_all" ] && rm_train=true && rm_eval=true
       [ "$policy" = "repeat_constant" ] && repeat=true
       srun python -m timetensors.experiment \
-        +data.path="${DATA_ROOT}/${dataset}/${dataset}" \
+        +data.raw_path="${DATA_ROOT}/${dataset}" \
+        +data.path="$DATASET_DIR" \
+        +data.name="$dataset" \
         +task.lags="$L" \
         +task.horizon="$H" \
         +data.splits.date_splits=[0.6,0.2,0.2] \
@@ -43,9 +48,10 @@ for dataset in "${DATASETS[@]}"; do
         +model.path=linear \
         +model.repeat_constant="$repeat" \
         +normalization.name=instance \
-        +experiment.skip_dataset_build=true \
+        +experiment.rebuild_dataset="$rebuild_dataset" \
         +output.dir="${OUT_ROOT}/${dataset}/${L}_${H}" \
         +output.name="linear_constants_${policy}"
+      rebuild_dataset=false
     done
   done
 done

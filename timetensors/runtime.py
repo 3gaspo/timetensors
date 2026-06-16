@@ -44,6 +44,35 @@ def section(config: Mapping[str, Any], key: str) -> dict[str, Any]:
     return dict(value)
 
 
+def config_bool(value: Any) -> bool:
+    if isinstance(value, str):
+        return value.lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def rebuild_dataset(config: Mapping[str, Any]) -> bool:
+    """Return whether raw data should be rebuilt into tensor artifacts.
+
+    Prefer ``experiment.rebuild_dataset``. Older keys are kept as aliases so
+    existing commands keep working while new scripts use one spelling.
+    """
+    experiment = section(config, "experiment")
+    data = section(config, "data")
+    for key in ("rebuild_dataset",):
+        if key in experiment:
+            return config_bool(experiment[key])
+        if key in data:
+            return config_bool(data[key])
+    if config_bool(experiment.get("skip_dataset_build", False)):
+        return False
+    return config_bool(
+        experiment.get(
+            "build_dataset",
+            data.get("rebuild", data.get("build", False)),
+        )
+    )
+
+
 def ensure_dir(path: str | Path) -> Path:
     path = Path(path).expanduser().resolve()
     path.mkdir(parents=True, exist_ok=True)

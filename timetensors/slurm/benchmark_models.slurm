@@ -12,6 +12,7 @@ export PYTHONPATH="${PYTHONPATH:-}:$(pwd)"
 
 DATA_ROOT="../datasets"
 OUT_ROOT="outputs/timetensor_models"
+REBUILD_DATASETS="${REBUILD_DATASETS:-true}"
 
 DATASETS=("electricity" "solar")
 SETTINGS=("168 24" "672 168")
@@ -19,6 +20,8 @@ EVAL_STRIDE=256
 MODELS=("persistence" "dlinear")
 
 for dataset in "${DATASETS[@]}"; do
+  DATASET_DIR="${DATA_ROOT}/${dataset}/${dataset}"
+  rebuild_dataset="$REBUILD_DATASETS"
   for setting in "${SETTINGS[@]}"; do
     read -r L H <<< "$setting"
     for model in "${MODELS[@]}"; do
@@ -27,7 +30,9 @@ for dataset in "${DATASETS[@]}"; do
         epochs=0
       fi
       srun python -m timetensors.experiment \
-        +data.path="${DATA_ROOT}/${dataset}" \
+        +data.raw_path="${DATA_ROOT}/${dataset}" \
+        +data.path="$DATASET_DIR" \
+        +data.name="$dataset" \
         +task.lags="$L" \
         +task.horizon="$H" \
         +data.splits.date_splits=[0.6,0.2,0.2] \
@@ -40,10 +45,11 @@ for dataset in "${DATASETS[@]}"; do
         +model.name="$model" \
         +model.path="$model" \
         +normalization.name=instance \
-        +experiment.skip_dataset_build=false \
+        +experiment.rebuild_dataset="$rebuild_dataset" \
         +output.dir="${OUT_ROOT}/${dataset}/${L}_${H}" \
         +output.name="$model" \
         hydra.run.dir='outputs/hydra/${now:%Y-%m-%d}/${now:%H-%M-%S}'
+      rebuild_dataset=false
     done
   done
 done

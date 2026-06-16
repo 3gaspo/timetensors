@@ -12,11 +12,14 @@ export PYTHONPATH="${PYTHONPATH:-}:$(pwd)"
 
 DATA_ROOT="../datasets"
 OUT_ROOT="outputs/timetensor_sampling"
+REBUILD_DATASETS="${REBUILD_DATASETS:-true}"
 DATASETS=("electricity" "traffic" "solar")
 SETTINGS=("168 24" "672 168" "1344 336")
 SEED="${SEED:-1}"
 
 for dataset in "${DATASETS[@]}"; do
+  DATASET_DIR="${DATA_ROOT}/${dataset}/${dataset}"
+  rebuild_dataset="$REBUILD_DATASETS"
   for setting in "${SETTINGS[@]}"; do
     read -r L H <<< "$setting"
     for sampling_name in random individuals dates all; do
@@ -25,7 +28,9 @@ for dataset in "${DATASETS[@]}"; do
         train_mode="all"
       fi
       srun python -m timetensors.experiment \
-        +data.path="${DATA_ROOT}/${dataset}/${dataset}" \
+        +data.raw_path="${DATA_ROOT}/${dataset}" \
+        +data.path="$DATASET_DIR" \
+        +data.name="$dataset" \
         +task.lags="$L" \
         +task.horizon="$H" \
         +data.splits.date_splits=[0.6,0.2,0.2] \
@@ -39,11 +44,12 @@ for dataset in "${DATASETS[@]}"; do
         +model.name=patchtst \
         +model.path=patchtst \
         +normalization.name=instance \
-        +experiment.skip_dataset_build=true \
+        +experiment.rebuild_dataset="$rebuild_dataset" \
         +experiment.evaluate=true \
         +misc.seed="$SEED" \
         +output.dir="${OUT_ROOT}/${dataset}/${L}_${H}" \
         +output.name="patchtst_sampling_${sampling_name}"
+      rebuild_dataset=false
     done
   done
 done

@@ -12,12 +12,15 @@ export PYTHONPATH="${PYTHONPATH:-}:$(pwd)"
 
 DATA_ROOT="../datasets"
 OUT_ROOT="outputs/timetensor_backprop"
+REBUILD_DATASETS="${REBUILD_DATASETS:-true}"
 DATASETS=("electricity" "traffic")
 SETTINGS=("168 24" "672 168")
 LOSSES=("MSE" "nMSE" "MAE" "nMAE" "rMSE")
 OPTIMS=("adam" "adamw" "sgd")
 
 for dataset in "${DATASETS[@]}"; do
+  DATASET_DIR="${DATA_ROOT}/${dataset}/${dataset}"
+  rebuild_dataset="$REBUILD_DATASETS"
   for setting in "${SETTINGS[@]}"; do
     read -r L H <<< "$setting"
     for loss in "${LOSSES[@]}"; do
@@ -25,7 +28,9 @@ for dataset in "${DATASETS[@]}"; do
         lr="0.001"
         [ "$optim" = "sgd" ] && lr="0.01"
         srun python -m timetensors.experiment \
-          +data.path="${DATA_ROOT}/${dataset}/${dataset}" \
+          +data.raw_path="${DATA_ROOT}/${dataset}" \
+          +data.path="$DATASET_DIR" \
+          +data.name="$dataset" \
           +task.lags="$L" \
           +task.horizon="$H" \
           +data.splits.date_splits=[0.6,0.2,0.2] \
@@ -41,9 +46,10 @@ for dataset in "${DATASETS[@]}"; do
           +model.name=linear \
           +model.path=linear \
           +normalization.name=instance \
-          +experiment.skip_dataset_build=true \
+          +experiment.rebuild_dataset="$rebuild_dataset" \
           +output.dir="${OUT_ROOT}/${dataset}/${L}_${H}" \
           +output.name="linear_${loss}_${optim}"
+        rebuild_dataset=false
       done
     done
   done

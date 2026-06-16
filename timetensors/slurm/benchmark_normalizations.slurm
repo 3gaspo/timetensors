@@ -12,11 +12,14 @@ export PYTHONPATH="${PYTHONPATH:-}:$(pwd)"
 
 DATA_ROOT="../datasets"
 OUT_ROOT="outputs/timetensor_normalizations"
+REBUILD_DATASETS="${REBUILD_DATASETS:-true}"
 DATASETS=("electricity" "traffic" "solar")
 SETTINGS=("168 24" "672 168")
 NORMS=("identity" "standard" "instance" "revin" "revin_last" "revin_arcsinh" "imm" "relative_mean" "rms" "minmax")
 
 for dataset in "${DATASETS[@]}"; do
+  DATASET_DIR="${DATA_ROOT}/${dataset}/${dataset}"
+  rebuild_dataset="$REBUILD_DATASETS"
   for setting in "${SETTINGS[@]}"; do
     read -r L H <<< "$setting"
     for norm in "${NORMS[@]}"; do
@@ -28,7 +31,9 @@ for dataset in "${DATASETS[@]}"; do
         extra_args+=(+normalization.kwargs.min_value=0.0 +normalization.kwargs.max_value=1.0)
       fi
       srun python -m timetensors.experiment \
-        +data.path="${DATA_ROOT}/${dataset}/${dataset}" \
+        +data.raw_path="${DATA_ROOT}/${dataset}" \
+        +data.path="$DATASET_DIR" \
+        +data.name="$dataset" \
         +task.lags="$L" \
         +task.horizon="$H" \
         +data.splits.date_splits=[0.6,0.2,0.2] \
@@ -42,9 +47,10 @@ for dataset in "${DATASETS[@]}"; do
         +model.path=dlinear \
         +normalization.name="$norm" \
         "${extra_args[@]}" \
-        +experiment.skip_dataset_build=true \
+        +experiment.rebuild_dataset="$rebuild_dataset" \
         +output.dir="${OUT_ROOT}/${dataset}/${L}_${H}" \
         +output.name="dlinear_norm_${norm}"
+      rebuild_dataset=false
     done
   done
 done

@@ -17,6 +17,7 @@ from .runtime import (
     device,
     model_specs,
     pretrained_path,
+    rebuild_dataset,
     run_dir,
     save_torch,
     section,
@@ -52,8 +53,7 @@ def train_stage(
     """Train a model and save state/history artifacts."""
     config = to_plain_config(config)
     if loaders is None:
-        experiment = section(config, "experiment")
-        if bool(experiment.get("build_dataset", False)):
+        if rebuild_dataset(config):
             built = build_dataset_stage(config)
             loaders = built.get("loaders")
             stats = built.get("stats")

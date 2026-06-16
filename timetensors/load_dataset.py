@@ -18,6 +18,7 @@ from .runtime import (
     default_sampling,
     default_splits,
     default_subsets,
+    rebuild_dataset,
     run_dir,
     section,
     seed,
@@ -32,13 +33,7 @@ def build_dataset_stage(config: Mapping[str, Any]) -> dict[str, Any]:
     data_cfg = section(config, "data")
     experiment = section(config, "experiment")
     out_path = dataset_path(config)
-    rebuild = bool(
-        data_cfg.get(
-            "rebuild",
-            data_cfg.get("build", experiment.get("build_dataset", False)),
-        )
-    )
-    if rebuild:
+    if rebuild_dataset(config):
         data_name = data_cfg.get("name", data_cfg.get("dataset"))
         if data_name is None:
             raise ValueError("data.name or data.dataset is required to rebuild tensors")
