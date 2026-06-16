@@ -20,7 +20,7 @@ EVAL_STRIDE=256
 MODELS=("persistence" "dlinear")
 
 for dataset in "${DATASETS[@]}"; do
-  DATASET_DIR="${DATA_ROOT}/${dataset}/${dataset}"
+  DATASET_DIR="${DATA_ROOT}/${dataset}"
   rebuild_dataset="$REBUILD_DATASETS"
   for setting in "${SETTINGS[@]}"; do
     read -r L H <<< "$setting"

@@ -18,7 +18,7 @@ SETTINGS=("168 24" "672 168")
 NORMS=("identity" "standard" "instance" "revin" "revin_last" "revin_arcsinh" "imm" "relative_mean" "rms" "minmax")
 
 for dataset in "${DATASETS[@]}"; do
-  DATASET_DIR="${DATA_ROOT}/${dataset}/${dataset}"
+  DATASET_DIR="${DATA_ROOT}/${dataset}"
   rebuild_dataset="$REBUILD_DATASETS"
   for setting in "${SETTINGS[@]}"; do
     read -r L H <<< "$setting"

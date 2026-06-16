@@ -19,7 +19,7 @@ LOSSES=("MSE" "nMSE" "MAE" "nMAE" "rMSE")
 OPTIMS=("adam" "adamw" "sgd")
 
 for dataset in "${DATASETS[@]}"; do
-  DATASET_DIR="${DATA_ROOT}/${dataset}/${dataset}"
+  DATASET_DIR="${DATA_ROOT}/${dataset}"
   rebuild_dataset="$REBUILD_DATASETS"
   for setting in "${SETTINGS[@]}"; do
     read -r L H <<< "$setting"

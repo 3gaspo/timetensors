@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import math
+import warnings
 from bisect import bisect_right
 from dataclasses import asdict, dataclass, replace
 from functools import cached_property
@@ -44,8 +45,17 @@ def set_seed(seed: Optional[int | str]) -> None:
     seed = int(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    if torch.cuda.is_available():
+    if _cuda_available():
         torch.cuda.manual_seed_all(seed)
+
+
+def _cuda_available() -> bool:
+    try:
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message="CUDA initialization:.*")
+            return torch.cuda.is_available()
+    except RuntimeError:
+        return False
 
 
 def _path(path: str | Path) -> Path:

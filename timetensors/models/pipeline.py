@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+import warnings
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -67,15 +68,24 @@ def set_seed(seed: int | None) -> None:
         return
     random.seed(seed)
     torch.manual_seed(seed)
-    if torch.cuda.is_available():
+    if cuda_available():
         torch.cuda.manual_seed_all(seed)
+
+
+def cuda_available() -> bool:
+    try:
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message="CUDA initialization:.*")
+            return torch.cuda.is_available()
+    except RuntimeError:
+        return False
 
 
 def default_device(device: str | torch.device | None = None) -> torch.device:
     if device is None or str(device).lower() == "auto":
-        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        return torch.device("cuda" if cuda_available() else "cpu")
     if str(device).lower() == "gpu":
-        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        return torch.device("cuda" if cuda_available() else "cpu")
     return torch.device(device)
 
 
