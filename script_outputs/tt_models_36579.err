@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "<frozen runpy>", line 189, in _run_module_as_main
+  File "<frozen runpy>", line 112, in _get_module_details
+  File "/home/h61084/codes/timetensors/timetensors/__init__.py", line 3, in <module>
+    from . import dataset, models
+  File "/home/h61084/codes/timetensors/timetensors/models/__init__.py", line 13, in <module>
+    from .models import ModelConfig, TimeTensorModel, build_model_from_config, load_model
+  File "/home/h61084/codes/timetensors/timetensors/models/models.py", line 31, in <module>
+    from .sota import DLinear, PatchTST
+ImportError: cannot import name 'DLinear' from 'timetensors.models.sota' (unknown location)
+srun: error: dgx-h100-bis: task 0: Exited with exit code 1
