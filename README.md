@@ -202,18 +202,37 @@ Modes: `identity`, `square`, `root`, `sign`, `mirror`, `kernel`, `noise`,
 | `normalization.kwargs` | `{}` | Constructor kwargs for the normalization. |
 | `normalization.configs` | `{}` | Alias for `normalization.kwargs`. |
 
-Valid normalization names and aliases:
+Canonical normalization names:
 
-`none`, `identity`, `default`, `standard`, `standardnorm`, `standard_norm`,
-`zscore`, `minmax`, `min_max`, `imm`, `instance_minmax`,
-`instance_min_max`, `instance`, `instancenorm`, `instance_norm`, `revin`,
-`reversible_instance_norm`, `revin_last`, `last_revin`, `revin_arcsinh`,
-`revin_asinh`, `revin_arcsinsh`, `revin_arcinsh`, `sigmoid`, `logistic`,
-`tanh`, `hyperbolic_tangent`, `relative_mean`, `rmean`, `rms`, `rms_norm`,
-`rmsnorm`.
+| Name | Meaning | Important kwargs |
+| --- | --- | --- |
+| `identity` | No normalization. | none |
+| `standard` | Global `(x - mean) / std`. Former aliases such as `standardnorm`, `standard_norm`, and `zscore` were the same thing. | `mean`, `std`, `eps` |
+| `min-max` | Global min-max scaling. Former aliases such as `minmax` and `min_max` were the same thing. | `min_value`, `max_value`, `eps` |
+| `in-min-max` | Per-instance min-max scaling. Former aliases such as `imm`, `instance_minmax`, and `instance_min_max` were the same thing. | `eps`, `detach_stats` |
+| `instance` | RevIN with `affine=false`. Kept as a convenient name because it is a common baseline. | `eps`, `center`, `detach_stats`, `transform` |
+| `revin` | Reversible instance normalization. Variants such as last-value centering, arcsinh transform, and affine/no-affine are kwargs, not separate names. | `affine`, `center`, `transform`, `eps`, `detach_stats`, `dim` |
+| `sigmoid` | Sigmoid transform with logit inverse. | `eps` |
+| `tanh` | Tanh transform with inverse hyperbolic tangent. | `eps` |
+| `relative_mean` | Scale by absolute instance mean. | `eps`, `detach_stats` |
+| `rms` | Scale by instance root-mean-square. | `eps`, `detach_stats` |
 
-Common kwargs include `eps`, `detach_stats`, `mean`, `std`, `min_value`,
-`max_value`, `dim`, `affine`, and `center`.
+RevIN examples:
+
+```bash
++normalization.name=revin
++normalization.kwargs.affine=false
+
++normalization.name=revin
++normalization.kwargs.center=last
+
++normalization.name=revin
++normalization.kwargs.transform=arcsinh
+```
+
+`arcsinh` means inverse hyperbolic sine. The code uses `torch.asinh`
+internally because that is PyTorch's function name, but the config spelling is
+`arcsinh`.
 
 ### `experiment`
 

@@ -126,7 +126,7 @@ class StandardNormalization(nn.Module):
 class MinMaxNormalization(nn.Module):
     """Normalize with provided global min and max values."""
 
-    name = "minmax"
+    name = "min-max"
 
     def __init__(self, min_value: float | torch.Tensor, max_value: float | torch.Tensor, eps: float = 1e-8):
         super().__init__()
@@ -150,7 +150,7 @@ class MinMaxNormalization(nn.Module):
 class InstanceMinMaxNormalization(nn.Module):
     """Normalize each sample with its own min and max."""
 
-    name = "imm"
+    name = "in-min-max"
 
     def __init__(self, eps: float = 1e-8, detach_stats: bool = True):
         super().__init__()
@@ -177,7 +177,7 @@ class InstanceMinMaxNormalization(nn.Module):
 
 
 class RevINNormalization(nn.Module):
-    """Reversible instance normalization with optional learnable affine layer."""
+    """Reversible instance normalization with optional affine and transform."""
 
     name = "revin"
 
@@ -187,15 +187,27 @@ class RevINNormalization(nn.Module):
         eps: float = 1e-8,
         affine: bool = True,
         center: str = "mean",
+        transform: str | None = None,
         detach_stats: bool = True,
     ):
         super().__init__()
         if center not in {"mean", "last"}:
             raise ValueError("center must be 'mean' or 'last'")
+        transform = (
+            None
+            if transform is None
+            else str(transform).lower().replace("-", "_")
+        )
+        transform = None if transform in {None, "none", "identity"} else transform
+        if transform not in {None, "arcsinh"}:
+            raise ValueError("transform must be None or 'arcsinh'")
         self.dim = None if dim is None else int(dim)
         self.eps = float(eps)
+        if isinstance(affine, str):
+            affine = affine.lower() in {"1", "true", "yes", "on"}
         self.affine = bool(affine)
         self.center = center
+        self.transform = transform
         self.detach_stats = bool(detach_stats)
         if self.affine:
             if self.dim is None:
@@ -215,11 +227,15 @@ class RevINNormalization(nn.Module):
         y = normalize_standard(x, center, std, eps=self.eps)
         if self.affine:
             y = y * self.gamma + self.beta
+        if self.transform == "arcsinh":
+            y = torch.asinh(y)
         return y
 
     def inverse(self, y: torch.Tensor) -> torch.Tensor:
         if self._center is None or self._std is None:
             raise RuntimeError("RevIN statistics are not available")
+        if self.transform == "arcsinh":
+            y = torch.sinh(y)
         if self.affine:
             y = (y - self.beta) / (self.gamma + self.eps)
         return denormalize_standard(y, self._center, self._std, eps=self.eps)
@@ -240,38 +256,6 @@ class RevINNormalization(nn.Module):
             detach=self.detach_stats,
             unbiased=False,
         )
-
-
-class InstanceNormalization(RevINNormalization):
-    """RevIN without learnable affine parameters."""
-
-    name = "instance"
-
-    def __init__(
-        self,
-        eps: float = 1e-8,
-        center: str = "mean",
-        detach_stats: bool = True,
-    ):
-        super().__init__(
-            dim=None,
-            eps=eps,
-            affine=False,
-            center=center,
-            detach_stats=detach_stats,
-        )
-
-
-class RevINArcsinhNormalization(RevINNormalization):
-    """RevIN followed by an arcsinh transform."""
-
-    name = "revin_arcsinh"
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.asinh(super().forward(x))
-
-    def inverse(self, y: torch.Tensor) -> torch.Tensor:
-        return super().inverse(torch.sinh(y))
 
 
 class SigmoidNormalization(nn.Module):
@@ -371,20 +355,15 @@ def build_normalization(config: dict | None, *, dim: int | None = None) -> nn.Mo
         return StandardNormalization(**kwargs)
     if name in {"minmax", "min_max"}:
         return MinMaxNormalization(**kwargs)
-    if name in {"imm", "instance_minmax", "instance_min_max"}:
+    if name in {"in_min_max", "imm", "instance_minmax", "instance_min_max"}:
         return InstanceMinMaxNormalization(**kwargs)
     if name in {"instance", "instancenorm", "instance_norm"}:
-        return InstanceNormalization(**kwargs)
+        kwargs.setdefault("dim", dim)
+        kwargs.setdefault("affine", False)
+        return RevINNormalization(**kwargs)
     if name in {"revin", "reversible_instance_norm"}:
         kwargs.setdefault("dim", dim)
         return RevINNormalization(**kwargs)
-    if name in {"revin_last", "last_revin"}:
-        kwargs.setdefault("dim", dim)
-        kwargs.setdefault("center", "last")
-        return RevINNormalization(**kwargs)
-    if name in {"revin_arcsinh", "revin_asinh", "revin_arcsinsh", "revin_arcinsh"}:
-        kwargs.setdefault("dim", dim)
-        return RevINArcsinhNormalization(**kwargs)
     if name in {"sigmoid", "logistic"}:
         return SigmoidNormalization(**kwargs)
     if name in {"tanh", "hyperbolic_tangent"}:

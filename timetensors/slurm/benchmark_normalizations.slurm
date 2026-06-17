@@ -15,7 +15,7 @@ OUT_ROOT="outputs/timetensor_normalizations"
 REBUILD_DATASETS="${REBUILD_DATASETS:-true}"
 DATASETS=("electricity" "traffic" "solar")
 SETTINGS=("168 24" "672 168")
-NORMS=("identity" "standard" "instance" "revin" "revin_last" "revin_arcsinh" "imm" "relative_mean" "rms" "minmax")
+NORMS=("identity" "standard" "instance" "revin" "revin-center-last" "revin-arcsinh" "in-min-max" "relative_mean" "rms" "min-max")
 
 for dataset in "${DATASETS[@]}"; do
   DATASET_DIR="${DATA_ROOT}/${dataset}"
@@ -23,12 +23,21 @@ for dataset in "${DATASETS[@]}"; do
   for setting in "${SETTINGS[@]}"; do
     read -r L H <<< "$setting"
     for norm in "${NORMS[@]}"; do
+      norm_name="$norm"
       extra_args=()
       if [ "$norm" = "standard" ]; then
         extra_args+=(+normalization.kwargs.mean=0.0 +normalization.kwargs.std=1.0)
       fi
-      if [ "$norm" = "minmax" ]; then
+      if [ "$norm" = "min-max" ]; then
         extra_args+=(+normalization.kwargs.min_value=0.0 +normalization.kwargs.max_value=1.0)
+      fi
+      if [ "$norm" = "revin-center-last" ]; then
+        norm_name="revin"
+        extra_args+=(+normalization.kwargs.center=last)
+      fi
+      if [ "$norm" = "revin-arcsinh" ]; then
+        norm_name="revin"
+        extra_args+=(+normalization.kwargs.transform=arcsinh)
       fi
       srun python -m timetensors.experiment \
         +data.raw_path="${DATA_ROOT}/${dataset}" \
@@ -45,7 +54,7 @@ for dataset in "${DATASETS[@]}"; do
         +training.loss=MSE \
         +model.name=dlinear \
         +model.path=dlinear \
-        +normalization.name="$norm" \
+        +normalization.name="$norm_name" \
         "${extra_args[@]}" \
         +experiment.rebuild_dataset="$rebuild_dataset" \
         +output.dir="${OUT_ROOT}/${dataset}/${L}_${H}" \
