@@ -9,6 +9,7 @@
 set -euo pipefail
 source .venv/bin/activate
 export PYTHONPATH="${PYTHONPATH:-}:$(pwd)"
+srun python -m timetensors.check_cuda --expected-torch 2.5.1
 
 DATA_ROOT="../datasets"
 OUT_ROOT="outputs/timetensor_backprop"

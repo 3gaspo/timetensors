@@ -320,6 +320,21 @@ REBUILD_DATASETS=false sbatch timetensors/slurm/benchmark_models.slurm
 
 ## Device Logging
 
+The project pins `torch==2.5.1` to avoid resolving to newer CUDA 13-era Torch
+wheels that may require newer NVIDIA drivers than the cluster provides. If you
+use `uv`, refresh the lock/environment after changing this pin; an old
+`uv.lock` can still install the previous Torch version.
+
+Each Slurm script starts with:
+
+```bash
+srun python -m timetensors.check_cuda
+```
+
+This prints Python, Torch, `torch.version.cuda`, Slurm GPU environment
+variables, `nvidia-smi`, and `torch.cuda.is_available()` before the benchmark
+loop starts.
+
 Training and evaluation log the selected device to stdout, which appears in
 `script_outputs/*.out` for Slurm jobs:
 
