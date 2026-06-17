@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
+import matplotlib
+
+matplotlib.use("Agg", force=True)
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -51,6 +54,52 @@ def plot_losses(train_losses, valid=None, title: str = "Training losses", logsca
     ax.set_ylabel("loss")
     ax.legend(frameon=False)
     return fig
+
+
+def plot_criterion_losses(
+    history: Mapping[str, Any],
+    criterion_name: str,
+    title: str = "Criterion loss",
+    logscale: bool = True,
+):
+    fig, ax = plt.subplots(figsize=(10, 4))
+    train_losses = history.get("train") or []
+    if train_losses:
+        ax.plot(np.arange(1, len(train_losses) + 1), train_losses, label=f"train:{criterion_name}")
+    for split, values in (history.get("valid") or {}).items():
+        if not isinstance(values, list) or not values:
+            continue
+        steps = [value.get("step", index + 1) for index, value in enumerate(values)]
+        losses = [
+            float(value["losses"][criterion_name])
+            for value in values
+            if criterion_name in value.get("losses", {})
+        ]
+        if len(losses) == len(steps):
+            ax.plot(steps, losses, marker="o", label=f"{split}:{criterion_name}")
+    if logscale:
+        ax.set_yscale("log")
+    ax.set_title(title)
+    ax.set_xlabel("optimizer step")
+    ax.set_ylabel(criterion_name)
+    ax.legend(frameon=False)
+    fig.tight_layout()
+    return fig
+
+
+def save_criterion_loss_plot(
+    history: Mapping[str, Any],
+    criterion_name: str,
+    save_path: str | Path,
+    *,
+    logscale: bool = True,
+) -> Path:
+    save_path = Path(save_path)
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    fig = plot_criterion_losses(history, criterion_name, logscale=logscale)
+    fig.savefig(save_path)
+    plt.close(fig)
+    return save_path
 
 
 def plot_error_distribution(loss_tensor, title: str = "Loss distribution"):

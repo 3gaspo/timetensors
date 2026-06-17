@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import sys
 from pathlib import Path
@@ -145,14 +144,6 @@ def seed(config: Mapping[str, Any]) -> int | None:
 def device(config: Mapping[str, Any]) -> str:
     training = section(config, "training")
     return str(training.get("device", "auto"))
-
-
-def save_json(value: Any, path: str | Path) -> Path:
-    path = Path(path).expanduser().resolve()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as stream:
-        json.dump(value, stream, indent=2)
-    return path
 
 
 def save_torch(value: Any, path: str | Path) -> Path:

@@ -39,7 +39,6 @@ def _cuda_summary() -> dict[str, Any]:
 def _fetch_loaders(config: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     lags, horizon = task_shape(config)
     data_cfg = section(config, "data")
-    LOGGER.info("Fetching evaluation loaders from %s", dataset_path(config))
     return fetch_training_data(
         dataset_path(config),
         default_splits(config),
@@ -60,7 +59,7 @@ def _load_eval_model(config: Mapping[str, Any], shape: tuple[int, int, int]):
     if state_path is None:
         candidate = run_dir(config) / "model_state.pt"
         state_path = candidate if candidate.exists() else None
-    LOGGER.info("Loading evaluation model: specs=%s state_path=%s", specs, state_path)
+    LOGGER.debug("loading evaluation model state=%s", state_path)
     return load_model(specs, state_dict_path=state_path) if state_path else load_model(specs)
 
 
@@ -144,20 +143,9 @@ def eval_stage(
 ) -> dict[str, Any]:
     """Evaluate a model and save all-loss artifacts."""
     config = to_plain_config(config)
-    LOGGER.info("===== Running eval script =====")
     if loaders is None:
         loaders, _ = _fetch_loaders(config)
-        LOGGER.info("Evaluation data fetched")
-    else:
-        LOGGER.info("Using loaders already prepared by parent experiment")
     shape = tuple(get_sizes(loaders))
-    LOGGER.info("Evaluation loader shape: %s", shape)
-    try:
-        _, split_info, batch_info = get_sizes(loaders, str_info=True)
-        LOGGER.info("Evaluation loader splits:\n%s", split_info)
-        LOGGER.info("Evaluation example batch:\n%s", batch_info)
-    except Exception as exc:
-        LOGGER.debug("Could not log detailed evaluation loader sizes: %s", exc)
     training = section(config, "training")
     criterion, eval_losses = get_losses(
         training.get("loss", "MSE"),
@@ -173,14 +161,11 @@ def eval_stage(
             lr=float(training.get("lr", 1e-3)),
             device=device(config),
         )
-        LOGGER.info("Fetched evaluation learner")
-    else:
-        LOGGER.info("Using learner from training stage")
     LOGGER.info(
-        "Evaluation device selected: requested=%s resolved=%s %s",
+        "eval_device requested=%s resolved=%s cuda=%s",
         device(config),
         learner.device,
-        _cuda_summary(),
+        bool(_cuda_summary().get("cuda_available")),
     )
     evaluation = section(config, "evaluation")
     selected = evaluation.get("splits")
@@ -190,39 +175,32 @@ def eval_stage(
     out_dir = run_dir(config)
     all_losses = {}
     per_user = {}
-    LOGGER.info("Evaluation splits selected: %s", selected)
+    LOGGER.info("evaluating splits=%s", selected)
     for split in selected:
         if split not in loaders:
-            LOGGER.warning("Evaluation split skipped because it was not found: %s", split)
+            LOGGER.warning("missing evaluation split=%s", split)
             continue
-        LOGGER.info("Evaluating split: %s", split)
         all_losses[split] = learner.evaluate(
             loaders[split],
             return_mode="all",
             runs=int(evaluation.get("runs", 1)),
             seed=seed(config),
         )["losses"]
-        LOGGER.info("Elementwise losses finished for split: %s", split)
         per_user[split] = evaluate_per_user_all(learner, loaders[split])
-        LOGGER.info("Per-user losses finished for split: %s", split)
+        LOGGER.info("evaluated split=%s", split)
     all_path = save_torch(all_losses, out_dir / "all_losses.pt")
     per_user_path = save_torch(per_user, out_dir / "per_user_all_losses.pt")
-    LOGGER.info("Saved all losses: %s", all_path)
-    LOGGER.info("Saved per-user losses: %s", per_user_path)
+    example_path = None
     if bool(evaluation.get("plot_example", False)) and selected:
-        save_path = (
-            out_dir / "example_prediction.pdf"
-            if bool(evaluation.get("save_example_plot", False))
-            else None
-        )
-        plot_example_prediction(learner, loaders[selected[0]], save_path=save_path)
-        LOGGER.info("Example prediction plot generated: %s", save_path)
-    LOGGER.info("End of eval script")
+        example_path = Path(evaluation.get("example_plot_path", out_dir / "example_prediction.png"))
+        plot_example_prediction(learner, loaders[selected[0]], save_path=example_path)
+        LOGGER.info("saved example_prediction=%s", example_path.name)
     return {
         "all_losses": all_losses,
         "per_user_all_losses": per_user,
         "all_losses_path": Path(all_path),
         "per_user_all_losses_path": Path(per_user_path),
+        "example_prediction_path": example_path,
         "learner": learner,
         "loaders": loaders,
     }

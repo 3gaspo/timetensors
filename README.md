@@ -245,8 +245,8 @@ internally because that is PyTorch's function name, but the config spelling is
 | --- | --- | --- |
 | `evaluation.splits` | all loader splits | Split name or list of split names to evaluate. |
 | `evaluation.runs` | `1` | Repeated evaluation passes for final evaluation. |
-| `evaluation.plot_example` | `false` | Generate an example prediction plot. |
-| `evaluation.save_example_plot` | `false` | Save example plot to `example_prediction.pdf`. |
+| `evaluation.plot_example` | `false` | Save an example prediction plot. |
+| `evaluation.example_plot_path` | `<run_dir>/example_prediction.png` | Optional path for the example prediction plot. |
 
 ### `output`
 
@@ -262,8 +262,8 @@ The run directory is:
 ```
 
 Saved artifacts include `model_state.pt`, `train_history.pt`,
-`train_metadata.pt`, `all_losses.pt`, `per_user_all_losses.pt`, and
-`experiment_summary.json`.
+`train_metadata.pt`, `criterion_loss.png`, `all_losses.pt`,
+`per_user_all_losses.pt`, and optionally `example_prediction.png`.
 
 ### `misc`
 
@@ -321,25 +321,13 @@ REBUILD_DATASETS=false sbatch timetensors/slurm/benchmark_models.slurm
 ## Device Logging
 
 The project pins `torch==2.5.1` to avoid resolving to newer CUDA 13-era Torch
-wheels that may require newer NVIDIA drivers than the cluster provides. If you
-use `uv`, refresh the lock/environment after changing this pin; an old
-`uv.lock` can still install the previous Torch version.
-
-Each Slurm script starts with:
-
-```bash
-srun python -m timetensors.check_cuda
-```
-
-This prints Python, Torch, `torch.version.cuda`, Slurm GPU environment
-variables, `nvidia-smi`, and `torch.cuda.is_available()` before the benchmark
-loop starts.
+wheels that may require newer NVIDIA drivers than the cluster provides.
 
 Training and evaluation log the selected device to stdout, which appears in
 `script_outputs/*.out` for Slurm jobs:
 
 ```text
-Device selected: requested=auto resolved=cuda:0 {'cuda_available': True, ...}
+device requested=gpu resolved=cuda:0 cuda=True
 ```
 
 If `resolved=cpu` or `cuda_available=False`, PyTorch did not find a usable GPU

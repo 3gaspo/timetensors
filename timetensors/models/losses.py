@@ -167,6 +167,8 @@ def get_losses(
     eval_names = ["MSE", "nMSE"]
     if complete_evaluation:
         eval_names.extend(["MAE", "nMAE", "rMSE"])
+    if criterion.name not in eval_names:
+        eval_names.append(criterion.name)
     eval_losses = {}
     for name in eval_names:
         config = LossConfig.from_dict(name)

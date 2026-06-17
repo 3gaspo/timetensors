@@ -32,8 +32,8 @@ from .runtime import (
 LOGGER = logging.getLogger(__name__)
 
 
-def _cuda_summary() -> dict[str, Any]:
-    return cuda_diagnostics()
+def _cuda_available() -> bool:
+    return bool(cuda_diagnostics().get("cuda_available"))
 
 
 def _fetch_loaders(config: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
@@ -61,32 +61,17 @@ def train_stage(
 ) -> dict[str, Any]:
     """Train a model and save state/history artifacts."""
     config = to_plain_config(config)
-    LOGGER.info("===== Running train script =====")
-    LOGGER.info("Run directory: %s", run_dir(config))
     if loaders is None:
         if rebuild_dataset(config):
-            LOGGER.info("Dataset rebuild requested before training")
             built = build_dataset_stage(config)
             loaders = built.get("loaders")
             stats = built.get("stats")
         else:
-            LOGGER.info("Fetching existing tensor dataset from %s", dataset_path(config))
             loaders, stats = _fetch_loaders(config)
-        LOGGER.info("Training data fetched")
-    else:
-        LOGGER.info("Using loaders already prepared by parent experiment")
     assert loaders is not None
     shape = tuple(get_sizes(loaders))
-    LOGGER.info("Loader shape: %s", shape)
-    try:
-        _, split_info, batch_info = get_sizes(loaders, str_info=True)
-        LOGGER.info("Loader splits:\n%s", split_info)
-        LOGGER.info("Example batch:\n%s", batch_info)
-    except Exception as exc:
-        LOGGER.debug("Could not log detailed loader sizes: %s", exc)
     specs = model_specs(config, shape)
     init_path = pretrained_path(config)
-    LOGGER.info("Building model: specs=%s pretrained=%s", specs, init_path)
     model = load_model(specs, state_dict_path=init_path) if init_path else load_model(specs)
     training = section(config, "training")
     criterion, eval_losses = get_losses(
@@ -103,18 +88,16 @@ def train_stage(
         optimizer_kwargs=training.get("optimizer_kwargs"),
         grad_clip=training.get("grad_clip"),
     )
-    LOGGER.info("Fetched model and learner")
     requested_device = device(config)
     LOGGER.info(
-        "Device selected: requested=%s resolved=%s %s",
+        "device requested=%s resolved=%s cuda=%s",
         requested_device,
         learner.device,
-        _cuda_summary(),
+        _cuda_available(),
     )
     epochs = int(training.get("epochs", 1))
     trainable = any(param.requires_grad for param in learner.model.parameters())
     if epochs > 0 and trainable:
-        LOGGER.info("--Training--")
         history = learner.fit(
             loaders["train"],
             epochs=epochs,
@@ -125,7 +108,6 @@ def train_stage(
             seed=seed(config),
             logger=LOGGER,
         )
-        LOGGER.info("Training stage finished")
     else:
         history = {
             "train": [],
@@ -133,15 +115,12 @@ def train_stage(
             "elapsed_seconds": 0.0,
             "skipped": "no trainable parameters" if not trainable else "epochs <= 0",
         }
-        LOGGER.info("Training skipped: %s", history["skipped"])
+        LOGGER.info("training_skipped reason=%s", history["skipped"])
     out_dir = run_dir(config)
     state_path = learner.model.save_state_dict(out_dir / "model_state.pt")
     save_torch(history, out_dir / "train_history.pt")
     save_torch({"stats": stats, "shape": shape}, out_dir / "train_metadata.pt")
-    LOGGER.info("Saved model state: %s", state_path)
-    LOGGER.info("Saved training history: %s", out_dir / "train_history.pt")
-    LOGGER.info("Saved training metadata: %s", out_dir / "train_metadata.pt")
-    LOGGER.info("End of train script")
+    LOGGER.debug("saved training artifacts in %s", out_dir)
     return {
         "model": learner.model,
         "learner": learner,

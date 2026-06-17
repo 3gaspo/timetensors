@@ -3,45 +3,62 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
+from time import perf_counter
 from typing import Any, Mapping
 
+from .dataset import get_sizes
 from .eval_model import eval_stage
 from .load_dataset import build_dataset_stage
-from .runtime import pretrained_path, rebuild_dataset, run_dir, save_json, section, setup_logging, to_plain_config
+from .runtime import pretrained_path, rebuild_dataset, run_dir, section, setup_logging, to_plain_config
 from .train_model import train_stage
+from .visu.experiment_plots import save_criterion_loss_plot
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _log_loader_sizes(loaders: Mapping[str, Any] | None) -> None:
+    if not loaders:
+        return
+    try:
+        shape, split_info, batch_info = get_sizes(loaders, str_info=True)
+        LOGGER.info("data_shape=%s", shape)
+        LOGGER.info("%s", split_info)
+        LOGGER.info("%s", batch_info)
+    except Exception as exc:
+        LOGGER.debug("could not log loader sizes: %s", exc)
 
 
 def run_experiment(config: Mapping[str, Any]) -> dict[str, Any]:
     """Run the configured TimeTensor experiment."""
     config = to_plain_config(config)
     setup_logging(section(config, "misc").get("log_level", "INFO"))
-    LOGGER.info("===== Running experiment script =====")
+    start = perf_counter()
     experiment = section(config, "experiment")
     results: dict[str, Any] = {}
     loaders = None
     stats = None
     out_dir = run_dir(config)
     LOGGER.info(
-        "Experiment configuration: run_dir=%s rebuild_dataset=%s evaluate=%s",
+        "experiment out=%s rebuild_dataset=%s evaluate=%s",
         out_dir,
         rebuild_dataset(config),
         bool(experiment.get("evaluate", True)),
     )
+    logged_sizes = False
 
     if rebuild_dataset(config):
-        LOGGER.info("Launching dataset stage")
+        LOGGER.info("dataset start")
         dataset_result = build_dataset_stage(config)
         loaders = dataset_result.get("loaders")
         stats = dataset_result.get("stats")
         results["dataset_path"] = str(dataset_result["dataset_path"])
         results["shape"] = dataset_result.get("shape")
-        LOGGER.info("Dataset stage finished: dataset_path=%s shape=%s", results["dataset_path"], results.get("shape"))
+        LOGGER.info("dataset done")
+        _log_loader_sizes(loaders)
+        logged_sizes = loaders is not None
     else:
-        LOGGER.info("Dataset rebuild skipped by config")
+        LOGGER.info("dataset rebuild skipped")
 
     has_pretrained = pretrained_path(config) is not None
     skip_training = bool(experiment.get("skip_training", False)) or (
@@ -49,26 +66,39 @@ def run_experiment(config: Mapping[str, Any]) -> dict[str, Any]:
     )
     train_result = None
     if not skip_training:
-        LOGGER.info("Launching training stage")
+        LOGGER.info("training start")
         train_result = train_stage(config, loaders=loaders, stats=stats)
         loaders = train_result["loaders"]
         stats = train_result["stats"]
         results["state_path"] = str(train_result["state_path"])
         results["train_history_path"] = str(out_dir / "train_history.pt")
-        LOGGER.info("Training stage finished: state_path=%s", results["state_path"])
+        if not logged_sizes:
+            _log_loader_sizes(loaders)
+            logged_sizes = True
+        history = train_result["history"]
+        if history.get("train"):
+            criterion_name = train_result["learner"].criterion.name
+            plot_path = save_criterion_loss_plot(
+                history,
+                criterion_name,
+                out_dir / "criterion_loss.png",
+            )
+            results["criterion_loss_plot_path"] = str(plot_path)
+            LOGGER.info("saved criterion_loss=%s", plot_path.name)
+        LOGGER.info("training done")
     elif has_pretrained:
         results["state_path"] = str(pretrained_path(config))
-        LOGGER.info("Training skipped: using pretrained state %s", results["state_path"])
+        LOGGER.info("training skipped pretrained=true")
     else:
         candidate = out_dir / "model_state.pt"
         if candidate.exists():
             results["state_path"] = str(candidate)
-            LOGGER.info("Training skipped: using existing state %s", results["state_path"])
+            LOGGER.info("training skipped existing_state=true")
         else:
-            LOGGER.info("Training skipped and no existing state was found")
+            LOGGER.info("training skipped existing_state=false")
 
     if bool(experiment.get("evaluate", True)):
-        LOGGER.info("Launching evaluation stage")
+        LOGGER.info("evaluation start")
         eval_result = eval_stage(
             config,
             model=None if train_result is None else train_result["model"],
@@ -77,18 +107,13 @@ def run_experiment(config: Mapping[str, Any]) -> dict[str, Any]:
         )
         results["all_losses_path"] = str(eval_result["all_losses_path"])
         results["per_user_all_losses_path"] = str(eval_result["per_user_all_losses_path"])
-        LOGGER.info(
-            "Evaluation stage finished: all_losses=%s per_user_all_losses=%s",
-            results["all_losses_path"],
-            results["per_user_all_losses_path"],
-        )
+        if eval_result.get("example_prediction_path") is not None:
+            results["example_prediction_path"] = str(eval_result["example_prediction_path"])
+        LOGGER.info("evaluation done")
     else:
-        LOGGER.info("Evaluation skipped by config")
+        LOGGER.info("evaluation skipped")
 
-    summary_path = save_json(results, out_dir / "experiment_summary.json")
-    results["summary_path"] = str(Path(summary_path))
-    LOGGER.info("Saved experiment summary: %s", results["summary_path"])
-    LOGGER.info("End of experiment script")
+    LOGGER.info("experiment done seconds=%.2f", perf_counter() - start)
     return results
 
 

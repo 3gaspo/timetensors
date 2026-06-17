@@ -386,28 +386,17 @@ class TorchLearner:
 
         if logger is not None:
             logger.info(
-                "Training started: device=%s epochs=%s steps_per_epoch=%s total_steps=%s "
-                "eval_every_steps=%s log_every_steps=%s eval_runs=%s",
-                self.device,
+                "training epochs=%s steps_per_epoch=%s total_steps=%s eval_every_steps=%s log_every_steps=%s",
                 epochs,
                 steps_per_epoch if steps_per_epoch is not None else "unknown",
                 total_steps if total_steps is not None else "unknown",
                 eval_interval,
                 log_interval,
-                eval_runs,
             )
 
         def run_validation(current_run_step: int) -> None:
             if not valid_loaders:
                 return
-            validation_start = perf_counter()
-            if logger is not None:
-                logger.info(
-                    "Validation started: step=%s run_step=%s splits=%s",
-                    self.global_step,
-                    current_run_step,
-                    ",".join(valid_loaders),
-                )
             for name, loader in valid_loaders.items():
                 result = self.evaluate(loader, runs=int(eval_runs), seed=None)
                 history["valid"].setdefault(name, []).append(
@@ -415,13 +404,7 @@ class TorchLearner:
                 )
                 if logger is not None:
                     losses = result.get("losses", {})
-                    logger.info("Validation finished: step=%s split=%s losses=%s", self.global_step, name, losses)
-            if logger is not None:
-                logger.info(
-                    "Validation stage finished: step=%s elapsed_seconds=%.2f",
-                    self.global_step,
-                    perf_counter() - validation_start,
-                )
+                    logger.info("step=%s valid[%s]=%s", self.global_step, name, losses)
 
         for epoch in range(int(epochs)):
             epoch_losses = []
@@ -447,14 +430,7 @@ class TorchLearner:
                 )
                 if should_log:
                     recent = sum(recent_losses) / max(len(recent_losses), 1)
-                    logger.info(
-                        "Training progress: step=%s run_step=%s epoch=%s/%s recent_train_loss=%.6f",
-                        self.global_step,
-                        run_step,
-                        epoch + 1,
-                        epochs,
-                        recent,
-                    )
+                    logger.info("step=%s train=%.6f", self.global_step, recent)
                     recent_losses.clear()
                 should_eval = bool(
                     valid_loaders
@@ -481,24 +457,13 @@ class TorchLearner:
                 )
         if recent_losses and logger is not None:
             recent = sum(recent_losses) / max(len(recent_losses), 1)
-            logger.info(
-                "Training progress: step=%s run_step=%s final_recent_train_loss=%.6f",
-                self.global_step,
-                run_step,
-                recent,
-            )
+            logger.info("step=%s train=%.6f", self.global_step, recent)
         if valid_loaders and last_eval_run_step != run_step:
             run_validation(run_step)
         elapsed_seconds = perf_counter() - start
         history["elapsed_seconds"] = elapsed_seconds
         if logger is not None:
-            avg_step = elapsed_seconds / run_step if run_step else 0.0
-            logger.info(
-                "Training finished: steps=%s elapsed_seconds=%.2f avg_seconds_per_step=%.4f",
-                run_step,
-                elapsed_seconds,
-                avg_step,
-            )
+            logger.info("training_done steps=%s seconds=%.2f", run_step, elapsed_seconds)
         return history
 
     def evaluate(
