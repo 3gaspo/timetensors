@@ -18,12 +18,16 @@ from .runtime import (
     device,
     model_specs,
     pretrained_path,
+    recompute_stats,
     rebuild_dataset,
     run_dir,
     save_torch,
     section,
     seed,
     setup_logging,
+    stats_eps,
+    stats_max_windows,
+    stats_seed,
     task_shape,
     to_plain_config,
 )
@@ -49,6 +53,10 @@ def _fetch_loaders(config: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mappin
         horizon,
         seed=seed(config),
         stats_save_path=run_dir(config) / "dataset_artifacts",
+        compute_stats=recompute_stats(config),
+        stats_max_windows=stats_max_windows(config),
+        stats_seed=stats_seed(config),
+        stats_eps=stats_eps(config),
         legacy_context_kind=data_cfg.get("legacy_context_kind"),
     )
 

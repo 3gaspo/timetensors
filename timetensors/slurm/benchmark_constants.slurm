@@ -13,6 +13,9 @@ export PYTHONPATH="${PYTHONPATH:-}:$(pwd)"
 DATA_ROOT="../datasets"
 OUT_ROOT="outputs/timetensor_constants"
 REBUILD_DATASETS="${REBUILD_DATASETS:-true}"
+RECOMPUTE_STATS="${RECOMPUTE_STATS:-true}"
+STATS_ARGS=()
+[ -n "${STATS_MAX_WINDOWS:-}" ] && STATS_ARGS+=(+experiment.stats_max_windows="$STATS_MAX_WINDOWS")
 DATASETS=("raw_electricity" "electricity" "traffic" "solar")
 SETTINGS=("168 24" "672 168")
 SEED="${SEED:-1}"
@@ -50,6 +53,8 @@ for dataset in "${DATASETS[@]}"; do
         +model.repeat_constant="$repeat" \
         +normalization.name=instance \
         +experiment.rebuild_dataset="$rebuild_dataset" \
+        +experiment.recompute_stats="$RECOMPUTE_STATS" \
+        "${STATS_ARGS[@]}" \
         +output.dir="${OUT_ROOT}/${dataset}/${L}_${H}" \
         +output.name="linear_constants_${policy}"
       rebuild_dataset=false

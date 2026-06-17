@@ -66,6 +66,29 @@ def rebuild_dataset(config: Mapping[str, Any]) -> bool:
     return config_bool(experiment.get("rebuild_dataset", False))
 
 
+def recompute_stats(config: Mapping[str, Any]) -> bool:
+    """Return whether L/H-dependent dataset statistics should be computed."""
+    experiment = section(config, "experiment")
+    return config_bool(experiment.get("recompute_stats", True))
+
+
+def stats_max_windows(config: Mapping[str, Any]) -> int | None:
+    experiment = section(config, "experiment")
+    value = experiment.get("stats_max_windows")
+    return None if value in {None, "None", "none", ""} else int(value)
+
+
+def stats_seed(config: Mapping[str, Any]) -> int | None:
+    experiment = section(config, "experiment")
+    value = experiment.get("stats_seed", experiment.get("seed"))
+    return None if value in {None, "None", "none", ""} else int(value)
+
+
+def stats_eps(config: Mapping[str, Any]) -> float:
+    experiment = section(config, "experiment")
+    return float(experiment.get("stats_eps", 1e-8))
+
+
 def ensure_dir(path: str | Path) -> Path:
     path = Path(path).expanduser().resolve()
     path.mkdir(parents=True, exist_ok=True)

@@ -232,6 +232,10 @@ internally because that is PyTorch's function name, but the config spelling is
 | Key | Default | Description |
 | --- | --- | --- |
 | `experiment.rebuild_dataset` | `false` | Build CSV/raw data into tensor artifacts before training/eval. |
+| `experiment.recompute_stats` | `true` | Compute and save final-loader numerical statistics such as average lookback mean/std and alpha/beta. |
+| `experiment.stats_max_windows` | unset | Optional maximum accessible windows to sample per loader for stats. Unset means all accessible windows. |
+| `experiment.stats_seed` | `experiment.seed` | RNG seed used only when `stats_max_windows` samples a subset. |
+| `experiment.stats_eps` | `1e-8` | Epsilon used in alpha/beta denominators. |
 | `experiment.prepare_loaders` | `data.prepare_loaders` or `true` | Build loaders during dataset stage. |
 | `experiment.evaluate` | `true` | Run evaluation after training/skipping training. |
 | `experiment.skip_training` | `false` | Skip training stage. |
@@ -300,6 +304,55 @@ The Slurm scripts expect CSVs and built tensors in the same dataset directory:
 `experiment.rebuild_dataset=true` writes the tensor files into `data.path`.
 Set `REBUILD_DATASETS=false` for Slurm runs when tensors already exist.
 
+## Data Flow
+
+The pipeline keeps tensor build metadata separate from final-loader statistics.
+Metadata describes what was built or selected. Stats are numerical averages
+computed only after the final loaders exist.
+
+```mermaid
+flowchart TD
+    A["Raw CSV in data.raw_path"] --> B{"experiment.rebuild_dataset"}
+    B -->|true| C["build_dataset: save values.pt, datetimes.pt, ids, dataset_metadata.json"]
+    B -->|false| D["load existing tensor artifacts from data.path"]
+    C --> D
+    D --> E["optional cluster assignment or selected cluster"]
+    E --> F["train/valid/test split"]
+    F --> G["optional subset per split or cluster"]
+    G --> H["TimeSeriesDataset with lags, horizon, stride, remove_cte, block_individuals"]
+    H --> I["TimeSeriesDataLoader"]
+    I --> J["metadata.json: shapes, modes, lengths, accessible windows"]
+    I --> K{"experiment.recompute_stats"}
+    K -->|true| L["stats.json: unroll accessible windows per loader"]
+    K -->|false| M["skip stats"]
+```
+
+Run-specific loader artifacts are saved under:
+
+```text
+<output.dir>/<output.name>/dataset_artifacts/
+  metadata.json
+  stats.json
+```
+
+`metadata.json` is hierarchical. It records dataset shapes, cluster creation or
+loading, split creation or loading, subset/sampling modes, loader lengths,
+potential windows, accessible windows, and windows removed by `remove_cte`.
+
+`stats.json` is per final loader. A loader means the final combination of
+cluster, split, subset, and sampling spec. Stats therefore change when `lags`,
+`horizon`, subset, stride, split, cluster, or constant-window filtering changes.
+They do not depend on random draw order. For example, a train loader with
+`train_idx_mode=random` and runtime length `1` still computes stats over all
+accessible `(individual, date)` windows unless `experiment.stats_max_windows`
+limits the scan.
+
+Stats currently include counts plus averaged lookback/future mean and std,
+`alpha = future_std / (lookback_std + eps)`, and
+`beta = (future_mean - lookback_mean) / (lookback_std + eps)`. If
+`experiment.stats_max_windows` is set, a reproducible random subset of
+accessible windows is used; otherwise the scan is deterministic and exhaustive.
+
 ## Slurm Scripts
 
 Scripts live in `timetensors/slurm/` and use these shell variables:
@@ -309,6 +362,8 @@ Scripts live in `timetensors/slurm/` and use these shell variables:
 | `DATA_ROOT` | `../datasets` in scripts | Parent dataset directory. |
 | `OUT_ROOT` | per-script `outputs/...` | Parent output directory. |
 | `REBUILD_DATASETS` | `true` | Rebuild tensors for the first run of each dataset. |
+| `RECOMPUTE_STATS` | `true` | Recompute L/H-dependent stats for each run. |
+| `STATS_MAX_WINDOWS` | unset | Optional cap forwarded to `experiment.stats_max_windows`. |
 | `SEED` | `1` where used | Experiment seed. |
 
 Submit from the repository root:

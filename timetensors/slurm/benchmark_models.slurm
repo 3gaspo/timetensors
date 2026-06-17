@@ -13,6 +13,9 @@ export PYTHONPATH="${PYTHONPATH:-}:$(pwd)"
 DATA_ROOT="../datasets"
 OUT_ROOT="outputs/timetensor_models"
 REBUILD_DATASETS="${REBUILD_DATASETS:-true}"
+RECOMPUTE_STATS="${RECOMPUTE_STATS:-true}"
+STATS_ARGS=()
+[ -n "${STATS_MAX_WINDOWS:-}" ] && STATS_ARGS+=(+experiment.stats_max_windows="$STATS_MAX_WINDOWS")
 
 DATASETS=("electricity" "solar")
 SETTINGS=("168 24" "672 168")
@@ -47,6 +50,8 @@ for dataset in "${DATASETS[@]}"; do
         +model.path="$model" \
         +normalization.name=instance \
         +experiment.rebuild_dataset="$rebuild_dataset" \
+        +experiment.recompute_stats="$RECOMPUTE_STATS" \
+        "${STATS_ARGS[@]}" \
         +output.dir="${OUT_ROOT}/${dataset}/${L}_${H}" \
         +output.name="$model" \
         hydra.run.dir='outputs/hydra/${now:%Y-%m-%d}/${now:%H-%M-%S}'

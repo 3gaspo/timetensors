@@ -48,7 +48,9 @@ def _fetch_loaders(config: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mappin
         lags,
         horizon,
         seed=seed(config),
-        stats_save_path=run_dir(config) / "dataset_artifacts",
+        stats_save_path=None,
+        compute_stats=False,
+        stats_max_windows=None,
         legacy_context_kind=data_cfg.get("legacy_context_kind"),
     )
 

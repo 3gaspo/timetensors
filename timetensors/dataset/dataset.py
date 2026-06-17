@@ -558,6 +558,21 @@ class IndexSampler:
             raise RuntimeError("remove_cte candidate filtering produced a constant window")
         return individuals, date
 
+    def iter_accessible_pairs(self) -> Any:
+        """Yield deterministic individual/date pairs reachable by this sampler.
+
+        This ignores random ordering and item length inflation, but respects
+        split/subset membership, stride, and constant-window filtering.
+        """
+        if self.config.subset_mode == "all":
+            yield from self.pair_candidates
+            return
+        for date in self.date_candidates:
+            for individual in self.individual_candidates:
+                if self.config.remove_cte and not self._non_constant([individual], date):
+                    continue
+                yield individual, date
+
 
 def _slice_temporal_context(
     context: torch.Tensor,
@@ -1966,7 +1981,36 @@ def _data_collection_stats(
     }
 
 
-def get_subset_stats(
+def _sampler_potential_windows(sampler: IndexSampler) -> int:
+    config = sampler.config
+    if config.subset_mode == "all" and config.subset_indices is not None:
+        return len(config.subset_indices)
+    if config.subset_mode == "dates" and config.subset_indices is not None:
+        date_count = len(config.subset_indices)
+    else:
+        date_count = len(range(0, sampler.max_dates, config.stride))
+    if config.subset_mode == "individuals" and config.subset_indices is not None:
+        individual_count = len(config.subset_indices)
+    else:
+        individual_count = sampler.individuals
+    return int(date_count * individual_count)
+
+
+def _sampler_window_metadata(sampler: IndexSampler) -> Dict[str, int]:
+    potential = _sampler_potential_windows(sampler)
+    accessible = (
+        sum(1 for _ in sampler.iter_accessible_pairs())
+        if sampler.config.remove_cte
+        else potential
+    )
+    return {
+        "potential_windows": potential,
+        "accessible_windows": accessible,
+        "constant_removed_windows": max(potential - accessible, 0),
+    }
+
+
+def get_loader_metadata(
     loaders: Mapping[str, DataLoader],
 ) -> Dict[str, Dict[str, Any]]:
     """Describe the effective candidate space after subset and stride rules."""
@@ -1977,6 +2021,7 @@ def get_subset_stats(
             components = []
             for component in dataset.datasets:
                 sampler = component.index_sampler
+                window_metadata = _sampler_window_metadata(sampler)
                 components.append(
                     {
                         "creation": getattr(
@@ -1994,6 +2039,7 @@ def get_subset_stats(
                         "stride": sampler.config.stride,
                         "true_length": sampler.true_len,
                         "dataset_length": len(component),
+                        **window_metadata,
                     }
                 )
             result[key] = {
@@ -2012,6 +2058,7 @@ def get_subset_stats(
             else min(config.block_individuals, len(sampler.individual_candidates))
         )
         full_item_batch = min(int(loader.batch_size), len(dataset))
+        window_metadata = _sampler_window_metadata(sampler)
         stats: Dict[str, Any] = {
             "creation": getattr(
                 dataset,
@@ -2036,11 +2083,227 @@ def get_subset_stats(
             "batch_size": loader.batch_size,
             "effective_first_batch_size": full_item_batch * users_per_item,
             "batches": len(loader),
+            **window_metadata,
         }
         if config.idx_mode == "all":
             stats["candidate_pairs"] = len(sampler.pair_candidates)
         result[key] = stats
     return result
+
+
+def get_subset_stats(loaders: Mapping[str, DataLoader]) -> Dict[str, Dict[str, Any]]:
+    """Backward-compatible name for loader metadata."""
+    return get_loader_metadata(loaders)
+
+
+def _leaf_datasets(dataset: Dataset) -> List[TimeSeriesDataset]:
+    if isinstance(dataset, AggregatedTimeSeriesDataset):
+        leaves: List[TimeSeriesDataset] = []
+        for component in dataset.datasets:
+            leaves.extend(_leaf_datasets(component))
+        return leaves
+    if isinstance(dataset, TimeSeriesDataset):
+        return [dataset]
+    raise TypeError(f"unsupported dataset type for stats: {type(dataset)!r}")
+
+
+def _finite_stats(values: np.ndarray) -> Tuple[float, float]:
+    finite = values[np.isfinite(values)]
+    if finite.size == 0:
+        return math.nan, math.nan
+    return float(np.mean(finite)), float(np.std(finite))
+
+
+def _accumulate_window_stats(
+    acc: Dict[str, Any],
+    dataset: TimeSeriesDataset,
+    individual: int,
+    date: int,
+    eps: float,
+) -> None:
+    total = dataset.lags + dataset.horizon
+    window = (
+        dataset.data.values[individual, :, date : date + total]
+        .detach()
+        .cpu()
+        .numpy()
+        .astype(float)
+    )
+    lookback = window[:, : dataset.lags]
+    future = window[:, dataset.lags :]
+    acc["item_windows"] += 1
+    for variate in range(window.shape[0]):
+        x = lookback[variate]
+        y = future[variate]
+        x_finite = np.isfinite(x).all()
+        y_finite = np.isfinite(y).all()
+        acc["variate_windows"] += 1
+        if not (x_finite and y_finite):
+            acc["invalid_variate_windows"] += 1
+            continue
+        mean_x = float(np.mean(x))
+        std_x = float(np.std(x))
+        mean_y = float(np.mean(y))
+        std_y = float(np.std(y))
+        if std_x == 0:
+            acc["constant_variate_windows"] += 1
+        acc["finite_variate_windows"] += 1
+        acc["lookback_mean_sum"] += mean_x
+        acc["lookback_std_sum"] += std_x
+        acc["future_mean_sum"] += mean_y
+        acc["future_std_sum"] += std_y
+        acc["alpha_sum"] += std_y / (std_x + eps)
+        acc["beta_sum"] += (mean_y - mean_x) / (std_x + eps)
+        x_value_mean, x_value_std = _finite_stats(x)
+        y_value_mean, y_value_std = _finite_stats(y)
+        if not math.isnan(x_value_mean):
+            acc["lookback_value_mean_sum"] += x_value_mean
+            acc["lookback_value_std_sum"] += x_value_std
+        if not math.isnan(y_value_mean):
+            acc["future_value_mean_sum"] += y_value_mean
+            acc["future_value_std_sum"] += y_value_std
+
+
+def _empty_loader_stats_accumulator() -> Dict[str, Any]:
+    return {
+        "item_windows": 0,
+        "variate_windows": 0,
+        "finite_variate_windows": 0,
+        "invalid_variate_windows": 0,
+        "constant_variate_windows": 0,
+        "lookback_mean_sum": 0.0,
+        "lookback_std_sum": 0.0,
+        "future_mean_sum": 0.0,
+        "future_std_sum": 0.0,
+        "lookback_value_mean_sum": 0.0,
+        "lookback_value_std_sum": 0.0,
+        "future_value_mean_sum": 0.0,
+        "future_value_std_sum": 0.0,
+        "alpha_sum": 0.0,
+        "beta_sum": 0.0,
+        "accessible_windows": 0,
+        "sampled_windows": 0,
+    }
+
+
+def _finalize_loader_stats(acc: Dict[str, Any], metadata: Mapping[str, Any]) -> Dict[str, Any]:
+    finite = max(int(acc["finite_variate_windows"]), 1)
+
+    def average(key: str) -> float:
+        if acc["finite_variate_windows"] == 0:
+            return math.nan
+        return float(acc[key] / finite)
+
+    return {
+        "metadata": dict(metadata),
+        "accessible_windows": int(acc["accessible_windows"]),
+        "sampled_windows": int(acc["sampled_windows"]),
+        "item_windows": int(acc["item_windows"]),
+        "variate_windows": int(acc["variate_windows"]),
+        "finite_variate_windows": int(acc["finite_variate_windows"]),
+        "invalid_variate_windows": int(acc["invalid_variate_windows"]),
+        "constant_variate_windows": int(acc["constant_variate_windows"]),
+        "lookback_mean": average("lookback_mean_sum"),
+        "lookback_std": average("lookback_std_sum"),
+        "future_mean": average("future_mean_sum"),
+        "future_std": average("future_std_sum"),
+        "lookback_value_mean": average("lookback_value_mean_sum"),
+        "lookback_value_std": average("lookback_value_std_sum"),
+        "future_value_mean": average("future_value_mean_sum"),
+        "future_value_std": average("future_value_std_sum"),
+        "alpha": average("alpha_sum"),
+        "beta": average("beta_sum"),
+    }
+
+
+def _single_loader_stats(
+    loader: DataLoader,
+    *,
+    max_windows: Optional[int],
+    seed: Optional[int | str],
+    eps: float,
+) -> Dict[str, Any]:
+    acc = _empty_loader_stats_accumulator()
+    component_records: List[Dict[str, Any]] = []
+    for dataset in _leaf_datasets(loader.dataset):
+        component_records.append(
+            {
+                "dataset": dataset,
+                "values": list(dataset.data.values.shape),
+                "lags": dataset.lags,
+                "horizon": dataset.horizon,
+                "accessible_windows": 0,
+                "sampled_windows": 0,
+            }
+        )
+    limit = None if max_windows is None else int(max_windows)
+    if limit is not None and limit < 1:
+        raise ValueError("stats_max_windows must be positive when set")
+
+    if limit is None:
+        for record in component_records:
+            dataset = record["dataset"]
+            for individual, date in dataset.index_sampler.iter_accessible_pairs():
+                record["accessible_windows"] += 1
+                record["sampled_windows"] += 1
+                acc["accessible_windows"] += 1
+                acc["sampled_windows"] += 1
+                _accumulate_window_stats(acc, dataset, individual, date, eps)
+    else:
+        rng = np.random.default_rng(None if seed in {None, "None"} else int(seed))
+        reservoir: List[Tuple[int, int, int]] = []
+        seen = 0
+        for component_index, record in enumerate(component_records):
+            dataset = record["dataset"]
+            for individual, date in dataset.index_sampler.iter_accessible_pairs():
+                seen += 1
+                record["accessible_windows"] += 1
+                acc["accessible_windows"] += 1
+                if len(reservoir) < limit:
+                    reservoir.append((component_index, individual, date))
+                    continue
+                replace_at = int(rng.integers(seen))
+                if replace_at < limit:
+                    reservoir[replace_at] = (component_index, individual, date)
+        for component_index, individual, date in reservoir:
+            record = component_records[component_index]
+            dataset = record["dataset"]
+            record["sampled_windows"] += 1
+            acc["sampled_windows"] += 1
+            _accumulate_window_stats(acc, dataset, individual, date, eps)
+
+    components = [
+        {key: value for key, value in record.items() if key != "dataset"}
+        for record in component_records
+    ]
+    metadata = {
+        "batch_size": loader.batch_size,
+        "batches": len(loader),
+        "dataset_length": len(loader.dataset),
+        "max_windows": max_windows,
+        "eps": float(eps),
+        "components": components,
+    }
+    return _finalize_loader_stats(acc, metadata)
+
+
+def get_loader_stats(
+    loaders: Mapping[str, DataLoader],
+    *,
+    max_windows: Optional[int] = None,
+    seed: Optional[int | str] = None,
+    eps: float = 1e-8,
+) -> Dict[str, Dict[str, Any]]:
+    """Compute numerical stats on accessible windows for each final loader."""
+    return {
+        key: _single_loader_stats(
+            loader,
+            max_windows=max_windows,
+            seed=seed,
+            eps=eps,
+        )
+        for key, loader in loaders.items()
+    }
 
 
 def _stats_file(path: str | Path, kind: str) -> Path:
@@ -2049,24 +2312,24 @@ def _stats_file(path: str | Path, kind: str) -> Path:
     return folder / f"{kind}_stats.json"
 
 
-def _save_stats(
+def _artifact_file(path: str | Path, name: str) -> Path:
+    path = _path(path)
+    folder = path.parent if path.suffix else path
+    return folder / f"{name}.json"
+
+
+def _save_loader_artifacts(
     path: Optional[str | Path],
     *,
-    dataset: Optional[Mapping[str, Any]] = None,
-    splits: Optional[Mapping[str, Any]] = None,
-    subsets: Optional[Mapping[str, Any]] = None,
-    clusters: Optional[Mapping[str, Any]] = None,
+    stats: Optional[Mapping[str, Any]] = None,
+    metadata: Optional[Mapping[str, Any]] = None,
 ) -> None:
     if path is None:
         return
-    if dataset is not None:
-        _write_json(dataset, _stats_file(path, "dataset"))
-    if splits is not None:
-        _write_json(splits, _stats_file(path, "splits"))
-    if subsets is not None:
-        _write_json(subsets, _stats_file(path, "subsets"))
-    if clusters is not None:
-        _write_json(clusters, _stats_file(path, "clusters"))
+    if stats is not None:
+        _write_json(stats, _artifact_file(path, "stats"))
+    if metadata is not None:
+        _write_json(metadata, _artifact_file(path, "metadata"))
 
 
 def _sampling_for_key(sampling: Mapping[str, Any], key: str) -> Dict[str, Any]:
@@ -2538,7 +2801,33 @@ def get_sizes(
     return shape, shape_str, batch_str
 
 
-def fetch_training_data(
+def _data_metadata(data: TimeSeriesData, *, source: str | Path | None = None) -> Dict[str, Any]:
+    metadata = {
+        "values": list(data.values.shape),
+        "individual_context": (
+            None
+            if data.individual_context is None
+            else list(data.individual_context.shape)
+        ),
+        "global_context": (
+            None
+            if data.global_context is None
+            else list(data.global_context.shape)
+        ),
+        "individuals": data.individuals,
+        "variates": data.variates,
+        "dates": data.dates,
+    }
+    if source is not None:
+        metadata["source"] = str(_path(source))
+    return metadata
+
+
+def _split_metadata(split_data: Mapping[str, TimeSeriesData]) -> Dict[str, Any]:
+    return {key: _data_metadata(data) for key, data in split_data.items()}
+
+
+def _fetch_training_data_legacy(
     data_path: str | Path,
     splits: Mapping[str, Any],
     sampling: Mapping[str, Any],
@@ -2558,6 +2847,7 @@ def fetch_training_data(
     subset_save_path: Optional[str | Path] = None,
     subset_load_path: Optional[str | Path] = None,
     stats_save_path: Optional[str | Path] = None,
+    compute_stats: bool = True,
     selected_splits: Optional[Sequence[str]] = None,
     legacy_context_kind: Optional[str] = None,
 ) -> Tuple[Any, Dict[str, Any]]:
@@ -2567,11 +2857,15 @@ def fetch_training_data(
     data = load_data(data_path, legacy_context_kind=legacy_context_kind)
     if cluster_ids is not None:
         data = data.subset(cluster_ids)
-    overall_stats = _data_collection_stats(
-        [data],
-        lags,
-        horizon,
-        bool(sampling.get("remove_eval_cte", False)),
+    overall_stats = (
+        _data_collection_stats(
+            [data],
+            lags,
+            horizon,
+            bool(sampling.get("remove_eval_cte", False)),
+        )
+        if compute_stats
+        else None
     )
     cluster_creation: Dict[str, Any] = {
         "creation_mode": "none",
@@ -2652,15 +2946,16 @@ def fetch_training_data(
             cluster_splits = _group_options(splits, name)
             cluster_subsets = _group_options(subsets, name)
             cluster_data = data.subset(ids)
-            cluster_stats[name] = {
-                "stage": "before_splitting",
-                "stats": get_dataset_stats(
-                    {name: cluster_data},
-                    lags,
-                    horizon,
-                    sampling,
-                )[name],
-            }
+            if compute_stats:
+                cluster_stats[name] = {
+                    "stage": "before_splitting",
+                    "stats": get_dataset_stats(
+                        {name: cluster_data},
+                        lags,
+                        horizon,
+                        sampling,
+                    )[name],
+                }
             split_data = get_dataset_splits(
                 cluster_splits,
                 data=cluster_data,
@@ -2697,11 +2992,86 @@ def fetch_training_data(
                 seed=seed,
             )
             loaders_by_cluster[name] = loaders
-            split_stats_by_cluster[name] = get_dataset_stats(
-                split_data, lags, horizon, sampling
-            )
-            subset_stats_by_cluster[name] = get_subset_stats(loaders)
+            if compute_stats:
+                split_stats_by_cluster[name] = get_dataset_stats(
+                    split_data, lags, horizon, sampling
+                )
+                subset_stats_by_cluster[name] = get_subset_stats(loaders)
         if not aggregate:
+            if compute_stats:
+                _save_stats(
+                    stats_save_path,
+                    dataset={
+                        "version": 1,
+                        "kind": "dataset_stats",
+                        "stage": "before_clustering",
+                        "creation": {
+                            "creation_mode": "loaded",
+                            "source": str(_path(data_path)),
+                        },
+                        "stats": overall_stats,
+                    },
+                    splits={
+                        "version": 1,
+                        "kind": "split_stats",
+                        "scope": "by_cluster",
+                        "groups": {
+                            name: {
+                                "creation": split_creation_by_cluster[name],
+                                "splits": split_stats_by_cluster[name],
+                            }
+                            for name, _ in items
+                        },
+                    },
+                    subsets={
+                        "version": 1,
+                        "kind": "subset_stats",
+                        "scope": "by_cluster",
+                        "groups": subset_stats_by_cluster,
+                    },
+                    clusters={
+                        "version": 1,
+                        "kind": "cluster_stats",
+                        "scope": "selected_clusters",
+                        "creation": cluster_creation,
+                        "clusters": cluster_stats,
+                    },
+                )
+            return loaders_by_cluster, split_stats_by_cluster if compute_stats else {}
+        split_names = next(iter(loaders_by_cluster.values())).keys()
+        if any(
+            set(loaders_by_cluster[name]) != set(split_names)
+            for name, _ in items
+        ):
+            raise ValueError(
+                "clusters must expose the same split names to be re-aggregated"
+            )
+        loaders = _aggregate_configured_loaders(
+            loaders_by_cluster,
+            sampling,
+            batch_size,
+        )
+        stats = {}
+        if compute_stats:
+            stats = {
+                split: _data_collection_stats(
+                    [
+                        loaders_by_cluster[name][split].dataset.data
+                        for name, _ in items
+                    ],
+                    lags,
+                    horizon,
+                    bool(
+                        sampling.get(
+                            "remove_train_cte"
+                            if split == "train"
+                            else "remove_eval_cte",
+                            False,
+                        )
+                    ),
+                )
+                for split in split_names
+            }
             _save_stats(
                 stats_save_path,
                 dataset={
@@ -2717,20 +3087,26 @@ def fetch_training_data(
                 splits={
                     "version": 1,
                     "kind": "split_stats",
-                    "scope": "by_cluster",
-                    "groups": {
+                    "scope": "aggregate",
+                    "creation": {
+                        "creation_mode": "aggregate",
+                        "components": list(loaders_by_cluster),
+                    },
+                    "per_cluster": {
                         name: {
                             "creation": split_creation_by_cluster[name],
                             "splits": split_stats_by_cluster[name],
                         }
                         for name, _ in items
                     },
+                    "aggregate_splits": stats,
                 },
                 subsets={
                     "version": 1,
                     "kind": "subset_stats",
-                    "scope": "by_cluster",
-                    "groups": subset_stats_by_cluster,
+                    "scope": "aggregate",
+                    "per_cluster": subset_stats_by_cluster,
+                    "subsets": get_subset_stats(loaders),
                 },
                 clusters={
                     "version": 1,
@@ -2740,83 +3116,6 @@ def fetch_training_data(
                     "clusters": cluster_stats,
                 },
             )
-            return loaders_by_cluster, split_stats_by_cluster
-        split_names = next(iter(loaders_by_cluster.values())).keys()
-        if any(
-            set(loaders_by_cluster[name]) != set(split_names)
-            for name, _ in items
-        ):
-            raise ValueError(
-                "clusters must expose the same split names to be re-aggregated"
-            )
-        loaders = _aggregate_configured_loaders(
-            loaders_by_cluster,
-            sampling,
-            batch_size,
-        )
-        stats = {
-            split: _data_collection_stats(
-                [
-                    loaders_by_cluster[name][split].dataset.data
-                    for name, _ in items
-                ],
-                lags,
-                horizon,
-                bool(
-                    sampling.get(
-                        "remove_train_cte"
-                        if split == "train"
-                        else "remove_eval_cte",
-                        False,
-                    )
-                ),
-            )
-            for split in split_names
-        }
-        _save_stats(
-            stats_save_path,
-            dataset={
-                "version": 1,
-                "kind": "dataset_stats",
-                "stage": "before_clustering",
-                "creation": {
-                    "creation_mode": "loaded",
-                    "source": str(_path(data_path)),
-                },
-                "stats": overall_stats,
-            },
-            splits={
-                "version": 1,
-                "kind": "split_stats",
-                "scope": "aggregate",
-                "creation": {
-                    "creation_mode": "aggregate",
-                    "components": list(loaders_by_cluster),
-                },
-                "per_cluster": {
-                    name: {
-                        "creation": split_creation_by_cluster[name],
-                        "splits": split_stats_by_cluster[name],
-                    }
-                    for name, _ in items
-                },
-                "aggregate_splits": stats,
-            },
-            subsets={
-                "version": 1,
-                "kind": "subset_stats",
-                "scope": "aggregate",
-                "per_cluster": subset_stats_by_cluster,
-                "subsets": get_subset_stats(loaders),
-            },
-            clusters={
-                "version": 1,
-                "kind": "cluster_stats",
-                "scope": "selected_clusters",
-                "creation": cluster_creation,
-                "clusters": cluster_stats,
-            },
-        )
         return loaders, stats
     split_data = get_dataset_splits(
         splits,
@@ -2845,32 +3144,332 @@ def fetch_training_data(
         subset_group="default",
         seed=seed,
     )
-    stats = get_dataset_stats(split_data, lags, horizon, sampling)
-    _save_stats(
-        stats_save_path,
-        dataset={
-            "version": 1,
-            "kind": "dataset_stats",
-            "stage": "before_clustering",
-            "creation": {
-                "creation_mode": "loaded",
-                "source": str(_path(data_path)),
+    stats = {}
+    if compute_stats:
+        stats = get_dataset_stats(split_data, lags, horizon, sampling)
+        _save_stats(
+            stats_save_path,
+            dataset={
+                "version": 1,
+                "kind": "dataset_stats",
+                "stage": "before_clustering",
+                "creation": {
+                    "creation_mode": "loaded",
+                    "source": str(_path(data_path)),
+                },
+                "stats": overall_stats,
             },
-            "stats": overall_stats,
+            splits={
+                "version": 1,
+                "kind": "split_stats",
+                "scope": "dataset",
+                "creation": split_creation,
+                "splits": stats,
+            },
+            subsets={
+                "version": 1,
+                "kind": "subset_stats",
+                "scope": "dataset",
+                "subsets": get_subset_stats(loaders),
+            },
+        )
+    return loaders, stats
+
+
+def _compute_loader_stats_if_requested(
+    loaders: Mapping[str, DataLoader],
+    *,
+    compute_stats: bool,
+    stats_max_windows: Optional[int],
+    stats_seed: Optional[int | str],
+    stats_eps: float,
+) -> Dict[str, Dict[str, Any]]:
+    if not compute_stats:
+        return {}
+    return get_loader_stats(
+        loaders,
+        max_windows=stats_max_windows,
+        seed=stats_seed,
+        eps=stats_eps,
+    )
+
+
+def fetch_training_data(
+    data_path: str | Path,
+    splits: Mapping[str, Any],
+    sampling: Mapping[str, Any],
+    subsets: Optional[Mapping[str, Any]],
+    batch_size: int,
+    lags: int,
+    horizon: int,
+    aggregate: bool = True,
+    seed: Optional[int | str] = None,
+    cluster_ids: Optional[Sequence[int]] = None,
+    cluster_path: Optional[str | Path] = None,
+    clusters: Optional[Mapping[str, Sequence[int]]] = None,
+    cluster_config: Optional[Mapping[str, Any]] = None,
+    cluster_save_path: Optional[str | Path] = None,
+    split_save_path: Optional[str | Path] = None,
+    split_load_path: Optional[str | Path] = None,
+    subset_save_path: Optional[str | Path] = None,
+    subset_load_path: Optional[str | Path] = None,
+    stats_save_path: Optional[str | Path] = None,
+    compute_stats: bool = True,
+    stats_max_windows: Optional[int] = None,
+    stats_seed: Optional[int | str] = None,
+    stats_eps: float = 1e-8,
+    selected_splits: Optional[Sequence[str]] = None,
+    legacy_context_kind: Optional[str] = None,
+) -> Tuple[Any, Dict[str, Any]]:
+    """Build final loaders and compute stats only on their accessible windows."""
+    set_seed(seed)
+    stats_seed = seed if stats_seed is None else stats_seed
+    if isinstance(selected_splits, str):
+        selected_splits = [selected_splits]
+    data = load_data(data_path, legacy_context_kind=legacy_context_kind)
+    if cluster_ids is not None:
+        data = data.subset(cluster_ids)
+    metadata: Dict[str, Any] = {
+        "version": 1,
+        "kind": "loader_metadata",
+        "dataset": _data_metadata(data, source=data_path),
+        "task": {"lags": int(lags), "horizon": int(horizon)},
+        "sampling": dict(sampling),
+        "subsets": dict(subsets or {}),
+        "stats": {
+            "computed": bool(compute_stats),
+            "max_windows": stats_max_windows,
+            "seed": None if stats_seed in {None, "None"} else int(stats_seed),
+            "eps": float(stats_eps),
         },
-        splits={
-            "version": 1,
-            "kind": "split_stats",
+    }
+
+    cluster_creation: Dict[str, Any] = {
+        "creation_mode": "none",
+        "access_mode": "none",
+        "randomized": False,
+    }
+    provided_cluster_sources = sum(
+        value is not None for value in (cluster_path, clusters, cluster_config)
+    )
+    if provided_cluster_sources > 1:
+        raise ValueError(
+            "provide only one of cluster_path, clusters, or cluster_config"
+        )
+    if cluster_path is not None:
+        clusters = load_clusters(cluster_path, data.individuals)
+        loaded_cluster_metadata = _load_cluster_metadata(cluster_path)
+        cluster_creation = {
+            **loaded_cluster_metadata,
+            "creation_mode": loaded_cluster_metadata.get(
+                "creation_mode",
+                "unknown",
+            ),
+            "access_mode": "loaded",
+            "source": str(_json_file(cluster_path, "clusters")),
+        }
+    elif cluster_config is not None:
+        clusters = create_iid_clusters(
+            data.individuals,
+            ratios=cluster_config.get("ratios"),
+            sizes=cluster_config.get("sizes"),
+            n_clusters=cluster_config.get("n_clusters"),
+            seed=cluster_config.get("seed", seed),
+        )
+        cluster_creation = {
+            "creation_mode": "generated",
+            "access_mode": "created",
+            "randomized": True,
+            "method": next(
+                key
+                for key in ("ratios", "sizes", "n_clusters")
+                if cluster_config.get(key) is not None
+            ),
+            "ratios": cluster_config.get("ratios"),
+            "sizes": cluster_config.get("sizes"),
+            "n_clusters": cluster_config.get("n_clusters"),
+            "seed": (
+                None
+                if cluster_config.get("seed", seed) in {None, "None"}
+                else int(cluster_config.get("seed", seed))
+            ),
+        }
+    elif clusters is not None:
+        cluster_creation = {
+            "creation_mode": "precomputed",
+            "access_mode": "provided",
+            "randomized": False,
+        }
+    if clusters is not None and cluster_save_path is not None:
+        save_clusters(clusters, cluster_save_path, metadata=cluster_creation)
+
+    selected_cluster = (subsets or {}).get("cluster")
+    if clusters is not None:
+        data = assign_cluster_ids(data, clusters)
+        items = (
+            [(selected_cluster, clusters[selected_cluster])]
+            if selected_cluster is not None
+            else list(clusters.items())
+        )
+        loaders_by_cluster: Dict[str, Mapping[str, DataLoader]] = {}
+        stats_by_cluster: Dict[str, Any] = {}
+        split_metadata_by_cluster: Dict[str, Any] = {}
+        loader_metadata_by_cluster: Dict[str, Any] = {}
+        cluster_metadata: Dict[str, Any] = {}
+        for name, ids in items:
+            cluster_splits = _group_options(splits, name)
+            cluster_subsets = _group_options(subsets, name)
+            cluster_data = data.subset(ids)
+            cluster_metadata[name] = _data_metadata(cluster_data)
+            split_data = get_dataset_splits(
+                cluster_splits,
+                data=cluster_data,
+                split_save_path=split_save_path,
+                split_load_path=split_load_path,
+                split_group=name,
+                seed=seed,
+            )
+            if selected_splits is not None:
+                missing = set(selected_splits) - set(split_data)
+                if missing:
+                    raise KeyError(
+                        f"cluster {name!r} has no splits {sorted(missing)}"
+                    )
+                split_data = {
+                    split: split_data[split] for split in selected_splits
+                }
+            split_metadata_by_cluster[name] = {
+                "creation": _split_creation_summary(
+                    cluster_splits,
+                    split_load_path,
+                    seed,
+                    group=name,
+                ),
+                "splits": _split_metadata(split_data),
+            }
+            loaders = get_train_loaders(
+                split_data,
+                batch_size,
+                lags,
+                horizon,
+                sampling,
+                cluster_subsets,
+                subset_save_path,
+                subset_load_path,
+                subset_group=name,
+                seed=seed,
+            )
+            loaders_by_cluster[name] = loaders
+            loader_metadata_by_cluster[name] = get_loader_metadata(loaders)
+            stats_by_cluster[name] = _compute_loader_stats_if_requested(
+                loaders,
+                compute_stats=compute_stats,
+                stats_max_windows=stats_max_windows,
+                stats_seed=stats_seed,
+                stats_eps=stats_eps,
+            )
+        metadata.update(
+            {
+                "cluster_creation": cluster_creation,
+                "clusters": cluster_metadata,
+                "splits": split_metadata_by_cluster,
+            }
+        )
+        if not aggregate:
+            metadata.update(
+                {
+                    "scope": "by_cluster",
+                    "loaders": loader_metadata_by_cluster,
+                }
+            )
+            _save_loader_artifacts(
+                stats_save_path,
+                stats=stats_by_cluster if compute_stats else None,
+                metadata=metadata,
+            )
+            return loaders_by_cluster, stats_by_cluster if compute_stats else {}
+
+        split_names = next(iter(loaders_by_cluster.values())).keys()
+        if any(
+            set(loaders_by_cluster[name]) != set(split_names)
+            for name, _ in items
+        ):
+            raise ValueError(
+                "clusters must expose the same split names to be re-aggregated"
+            )
+        loaders = _aggregate_configured_loaders(
+            loaders_by_cluster,
+            sampling,
+            batch_size,
+        )
+        stats = _compute_loader_stats_if_requested(
+            loaders,
+            compute_stats=compute_stats,
+            stats_max_windows=stats_max_windows,
+            stats_seed=stats_seed,
+            stats_eps=stats_eps,
+        )
+        metadata.update(
+            {
+                "scope": "aggregate",
+                "per_cluster_loaders": loader_metadata_by_cluster,
+                "loaders": get_loader_metadata(loaders),
+            }
+        )
+        _save_loader_artifacts(
+            stats_save_path,
+            stats=stats if compute_stats else None,
+            metadata=metadata,
+        )
+        return loaders, stats
+
+    split_data = get_dataset_splits(
+        splits,
+        data=data,
+        split_save_path=split_save_path,
+        split_load_path=split_load_path,
+        seed=seed,
+    )
+    if selected_splits is not None:
+        missing = set(selected_splits) - set(split_data)
+        if missing:
+            raise KeyError(f"dataset has no splits {sorted(missing)}")
+        split_data = {
+            split: split_data[split] for split in selected_splits
+        }
+    loaders = get_train_loaders(
+        split_data,
+        batch_size,
+        lags,
+        horizon,
+        sampling,
+        subsets,
+        subset_save_path,
+        subset_load_path,
+        subset_group="default",
+        seed=seed,
+    )
+    stats = _compute_loader_stats_if_requested(
+        loaders,
+        compute_stats=compute_stats,
+        stats_max_windows=stats_max_windows,
+        stats_seed=stats_seed,
+        stats_eps=stats_eps,
+    )
+    metadata.update(
+        {
             "scope": "dataset",
-            "creation": split_creation,
-            "splits": stats,
-        },
-        subsets={
-            "version": 1,
-            "kind": "subset_stats",
-            "scope": "dataset",
-            "subsets": get_subset_stats(loaders),
-        },
+            "splits": {
+                "creation": _split_creation_summary(splits, split_load_path, seed),
+                "splits": _split_metadata(split_data),
+            },
+            "loaders": get_loader_metadata(loaders),
+        }
+    )
+    _save_loader_artifacts(
+        stats_save_path,
+        stats=stats if compute_stats else None,
+        metadata=metadata,
     )
     return loaders, stats
 

@@ -9,7 +9,7 @@ from typing import Any, Mapping
 from .dataset import get_sizes
 from .eval_model import eval_stage
 from .load_dataset import build_dataset_stage
-from .runtime import pretrained_path, rebuild_dataset, run_dir, section, setup_logging, to_plain_config
+from .runtime import pretrained_path, rebuild_dataset, recompute_stats, run_dir, section, setup_logging, to_plain_config
 from .train_model import train_stage
 from .visu.experiment_plots import save_criterion_loss_plot
 
@@ -45,6 +45,7 @@ def run_experiment(config: Mapping[str, Any]) -> dict[str, Any]:
         rebuild_dataset(config),
         bool(experiment.get("evaluate", True)),
     )
+    LOGGER.info("stats recompute=%s", recompute_stats(config))
     logged_sizes = False
 
     if rebuild_dataset(config):
