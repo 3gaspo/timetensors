@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
 from typing import Any
+import os
 
 import torch
 import torch.nn as nn
@@ -73,20 +74,55 @@ def set_seed(seed: int | None) -> None:
 
 
 def cuda_available() -> bool:
+    return bool(cuda_diagnostics()["cuda_available"])
+
+
+def cuda_diagnostics() -> dict[str, Any]:
+    diagnostics: dict[str, Any] = {
+        "torch_version": torch.__version__,
+        "torch_cuda_version": torch.version.cuda,
+        "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
+        "slurm_job_gpus": os.environ.get("SLURM_JOB_GPUS"),
+        "slurm_step_gpus": os.environ.get("SLURM_STEP_GPUS"),
+    }
     try:
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", message="CUDA initialization:.*")
-            return torch.cuda.is_available()
-    except RuntimeError:
-        return False
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            diagnostics["cuda_available"] = torch.cuda.is_available()
+        if caught:
+            diagnostics["cuda_warnings"] = [str(warning.message) for warning in caught]
+    except RuntimeError as exc:
+        diagnostics["cuda_available"] = False
+        diagnostics["cuda_error"] = str(exc)
+    if diagnostics["cuda_available"]:
+        diagnostics["cuda_device_count"] = torch.cuda.device_count()
+        diagnostics["cuda_current_device"] = torch.cuda.current_device()
+        diagnostics["cuda_device_name"] = torch.cuda.get_device_name(torch.cuda.current_device())
+    return diagnostics
 
 
 def default_device(device: str | torch.device | None = None) -> torch.device:
     if device is None or str(device).lower() == "auto":
         return torch.device("cuda" if cuda_available() else "cpu")
-    if str(device).lower() == "gpu":
-        return torch.device("cuda" if cuda_available() else "cpu")
+    if str(device).lower() in {"gpu", "cuda"}:
+        diagnostics = cuda_diagnostics()
+        if diagnostics["cuda_available"]:
+            return torch.device("cuda")
+        raise RuntimeError(f"CUDA was requested but is not available: {diagnostics}")
     return torch.device(device)
+
+
+def _step_interval(value: Any) -> int | None:
+    if value in {None, "None", "none", "null", ""}:
+        return None
+    return int(value)
+
+
+def _safe_len(value: Any) -> int | None:
+    try:
+        return len(value)
+    except TypeError:
+        return None
 
 
 def ensure_dir(path: str | Path) -> Path:
@@ -221,8 +257,9 @@ class TorchLearner:
         scheduler: Any = None,
         grad_clip: float | None = None,
     ):
-        self.model = model.to(default_device(device))
-        self.device = next(self.model.parameters(), torch.empty(0, device=default_device(device))).device
+        resolved_device = default_device(device)
+        self.model = model.to(resolved_device)
+        self.device = next(self.model.parameters(), torch.empty(0, device=resolved_device)).device
         self.criterion = build_loss(criterion)
         self.eval_losses = dict(eval_losses or get_losses("MSE")[1])
         self.lr = float(lr)
@@ -330,22 +367,138 @@ class TorchLearner:
         *,
         epochs: int = 1,
         valid_loaders: Mapping[str, Iterable[Any]] | None = None,
-        eval_freq: int | None = None,
+        eval_every_steps: int | None = 100,
+        log_every_steps: int | None = 1000,
+        eval_runs: int = 1,
         seed: int | None = None,
         logger: Any = None,
     ) -> dict[str, Any]:
         set_seed(seed)
         history: dict[str, Any] = {"train": [], "valid": {}}
         start = perf_counter()
-        for epoch in range(int(epochs)):
-            losses = self.train_epoch(train_loader)
-            history["train"].extend(losses)
-            if valid_loaders and (eval_freq is None or (epoch + 1) % int(eval_freq) == 0):
-                for name, loader in valid_loaders.items():
-                    history["valid"].setdefault(name, []).append(self.evaluate(loader))
+        recent_losses: list[float] = []
+        run_step = 0
+        last_eval_run_step: int | None = None
+        steps_per_epoch = _safe_len(train_loader)
+        total_steps = None if steps_per_epoch is None else int(epochs) * steps_per_epoch
+        eval_interval = _step_interval(eval_every_steps)
+        log_interval = _step_interval(log_every_steps)
+
+        if logger is not None:
+            logger.info(
+                "Training started: device=%s epochs=%s steps_per_epoch=%s total_steps=%s "
+                "eval_every_steps=%s log_every_steps=%s eval_runs=%s",
+                self.device,
+                epochs,
+                steps_per_epoch if steps_per_epoch is not None else "unknown",
+                total_steps if total_steps is not None else "unknown",
+                eval_interval,
+                log_interval,
+                eval_runs,
+            )
+
+        def run_validation(current_run_step: int) -> None:
+            if not valid_loaders:
+                return
+            validation_start = perf_counter()
             if logger is not None:
-                logger.info(f"epoch {epoch + 1}/{epochs} train_loss={sum(losses) / max(len(losses), 1):.6f}")
-        history["elapsed_seconds"] = perf_counter() - start
+                logger.info(
+                    "Validation started: step=%s run_step=%s splits=%s",
+                    self.global_step,
+                    current_run_step,
+                    ",".join(valid_loaders),
+                )
+            for name, loader in valid_loaders.items():
+                result = self.evaluate(loader, runs=int(eval_runs), seed=None)
+                history["valid"].setdefault(name, []).append(
+                    {"step": self.global_step, **result}
+                )
+                if logger is not None:
+                    losses = result.get("losses", {})
+                    logger.info("Validation finished: step=%s split=%s losses=%s", self.global_step, name, losses)
+            if logger is not None:
+                logger.info(
+                    "Validation stage finished: step=%s elapsed_seconds=%.2f",
+                    self.global_step,
+                    perf_counter() - validation_start,
+                )
+
+        for epoch in range(int(epochs)):
+            epoch_losses = []
+            for batch in train_loader:
+                loss = self.train_step(batch)
+                run_step += 1
+                history["train"].append(loss)
+                epoch_losses.append(loss)
+                recent_losses.append(loss)
+                is_first_step = run_step == 1
+                is_final_step = total_steps is not None and run_step == total_steps
+                should_log = (
+                    logger is not None
+                    and (
+                        is_first_step
+                        or is_final_step
+                        or (
+                            log_interval is not None
+                            and log_interval > 0
+                            and run_step % log_interval == 0
+                        )
+                    )
+                )
+                if should_log:
+                    recent = sum(recent_losses) / max(len(recent_losses), 1)
+                    logger.info(
+                        "Training progress: step=%s run_step=%s epoch=%s/%s recent_train_loss=%.6f",
+                        self.global_step,
+                        run_step,
+                        epoch + 1,
+                        epochs,
+                        recent,
+                    )
+                    recent_losses.clear()
+                should_eval = bool(
+                    valid_loaders
+                    and (
+                        is_first_step
+                        or is_final_step
+                        or (
+                            eval_interval is not None
+                            and eval_interval > 0
+                            and run_step % eval_interval == 0
+                        )
+                    )
+                )
+                if should_eval:
+                    run_validation(run_step)
+                    last_eval_run_step = run_step
+            if logger is not None and epoch_losses:
+                logger.debug(
+                    "epoch %s/%s train_loss=%.6f steps=%s",
+                    epoch + 1,
+                    epochs,
+                    sum(epoch_losses) / max(len(epoch_losses), 1),
+                    len(epoch_losses),
+                )
+        if recent_losses and logger is not None:
+            recent = sum(recent_losses) / max(len(recent_losses), 1)
+            logger.info(
+                "Training progress: step=%s run_step=%s final_recent_train_loss=%.6f",
+                self.global_step,
+                run_step,
+                recent,
+            )
+        if valid_loaders and last_eval_run_step != run_step:
+            run_validation(run_step)
+        elapsed_seconds = perf_counter() - start
+        history["elapsed_seconds"] = elapsed_seconds
+        if logger is not None:
+            avg_step = elapsed_seconds / run_step if run_step else 0.0
+            logger.info(
+                "Training finished: steps=%s elapsed_seconds=%.2f avg_seconds_per_step=%.4f",
+                run_step,
+                elapsed_seconds,
+                avg_step,
+            )
         return history
 
     def evaluate(
@@ -490,7 +643,9 @@ def train_model(
     loaders: Mapping[str, Iterable[Any]] | Iterable[Any],
     *,
     epochs: int = 1,
-    eval_freq: int | None = None,
+    eval_every_steps: int | None = 100,
+    log_every_steps: int | None = 1000,
+    eval_runs: int = 1,
     seed: int | None = None,
     logger: Any = None,
 ) -> dict[str, Any]:
@@ -504,7 +659,9 @@ def train_model(
         train_loader,
         epochs=epochs,
         valid_loaders=valid_loaders,
-        eval_freq=eval_freq,
+        eval_every_steps=eval_every_steps,
+        log_every_steps=log_every_steps,
+        eval_runs=eval_runs,
         seed=seed,
         logger=logger,
     )

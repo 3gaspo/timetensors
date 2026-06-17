@@ -62,26 +62,9 @@ def config_bool(value: Any) -> bool:
 
 
 def rebuild_dataset(config: Mapping[str, Any]) -> bool:
-    """Return whether raw data should be rebuilt into tensor artifacts.
-
-    Prefer ``experiment.rebuild_dataset``. Older keys are kept as aliases so
-    existing commands keep working while new scripts use one spelling.
-    """
+    """Return whether raw data should be rebuilt into tensor artifacts."""
     experiment = section(config, "experiment")
-    data = section(config, "data")
-    for key in ("rebuild_dataset",):
-        if key in experiment:
-            return config_bool(experiment[key])
-        if key in data:
-            return config_bool(data[key])
-    if config_bool(experiment.get("skip_dataset_build", False)):
-        return False
-    return config_bool(
-        experiment.get(
-            "build_dataset",
-            data.get("rebuild", data.get("build", False)),
-        )
-    )
+    return config_bool(experiment.get("rebuild_dataset", False))
 
 
 def ensure_dir(path: str | Path) -> Path:
@@ -92,22 +75,18 @@ def ensure_dir(path: str | Path) -> Path:
 
 def dataset_path(config: Mapping[str, Any]) -> Path:
     data = section(config, "data")
-    return Path(data.get("built_path", data.get("path", "run/dataset"))).expanduser()
+    return Path(data.get("path", "run/dataset")).expanduser()
 
 
 def output_dir(config: Mapping[str, Any]) -> Path:
     output = section(config, "output")
-    misc = section(config, "misc")
-    return ensure_dir(output.get("dir", misc.get("output_dir", "outputs")))
+    return ensure_dir(output.get("dir", "outputs"))
 
 
 def save_name(config: Mapping[str, Any]) -> str:
     output = section(config, "output")
-    misc = section(config, "misc")
     if output.get("name") is not None:
         return str(output["name"])
-    if misc.get("save_name") is not None:
-        return str(misc["save_name"])
     model = section(config, "model")
     return str(model.get("name", "model"))
 
@@ -155,20 +134,17 @@ def task_shape(config: Mapping[str, Any]) -> tuple[int, int]:
 
 def batch_size(config: Mapping[str, Any]) -> int:
     training = section(config, "training")
-    return int(training.get("batch_size", training.get("bs", 32)))
+    return int(training.get("batch_size", 32))
 
 
 def seed(config: Mapping[str, Any]) -> int | None:
-    misc = section(config, "misc")
-    value = section(config, "experiment").get("seed", misc.get("seed"))
+    value = section(config, "experiment").get("seed")
     return None if value in {None, "None"} else int(value)
 
 
 def device(config: Mapping[str, Any]) -> str:
     training = section(config, "training")
-    misc = section(config, "misc")
-    raw = str(training.get("device", misc.get("device", "auto")))
-    return "gpu" if raw == "cuda" else raw
+    return str(training.get("device", "auto"))
 
 
 def save_json(value: Any, path: str | Path) -> Path:
@@ -193,7 +169,7 @@ def model_specs(config: Mapping[str, Any], shape: tuple[int, int, int]) -> str |
     lags, dim, horizon = shape
     name = str(model.get("name", model.get("path", "linear")))
     path = str(model.get("path", name))
-    kwargs = dict(model.get("kwargs") or model.get("configs") or {})
+    kwargs = dict(model.get("kwargs") or {})
     key = path.lower()
     if key in {"persistence", "expected", "repeat"}:
         kwargs.setdefault("horizon", horizon)
@@ -209,9 +185,9 @@ def model_specs(config: Mapping[str, Any], shape: tuple[int, int, int]) -> str |
     else:
         normalization_config = {
             "name": normalization.get("name", "identity"),
-            "kwargs": normalization.get("kwargs", normalization.get("configs", {})) or {},
+            "kwargs": normalization.get("kwargs", {}) or {},
         }
-    augmentation = model.get("covariate_augmentation", model.get("augmentation"))
+    augmentation = model.get("covariate_augmentation")
     return ModelConfig(
         name=name,
         path=path,

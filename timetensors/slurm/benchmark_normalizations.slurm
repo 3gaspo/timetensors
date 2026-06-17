@@ -49,7 +49,8 @@ for dataset in "${DATASETS[@]}"; do
         +data.sampling.train_idx_mode=random \
         +data.sampling.eval_idx_mode=all \
         +data.sampling.eval_stride="$H" \
-        +training.bs=128 \
+        +training.batch_size=128 \
+        +training.device=gpu \
         +training.epochs=50 \
         +training.loss=MSE \
         +model.name=dlinear \

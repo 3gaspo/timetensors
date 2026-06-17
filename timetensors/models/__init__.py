@@ -28,7 +28,7 @@ from .normalizations import (
     get_rms_stats,
     normalize_standard,
 )
-from .pipeline import Batch, LearnerConfig, TorchLearner, cuda_available, load_learner, train_model
+from .pipeline import Batch, LearnerConfig, TorchLearner, cuda_available, cuda_diagnostics, load_learner, train_model
 from .sota import DLinear, PatchTST
 
 __all__ = [
@@ -62,6 +62,7 @@ __all__ = [
     "build_model_from_config",
     "build_normalization",
     "cuda_available",
+    "cuda_diagnostics",
     "denormalize_standard",
     "get_losses",
     "get_minmax_stats",

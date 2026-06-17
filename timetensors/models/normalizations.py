@@ -347,29 +347,29 @@ def build_normalization(config: dict | None, *, dim: int | None = None) -> nn.Mo
     """Build a normalization module from a small config dictionary."""
     if config is None:
         return IdentityNormalization()
-    name = str(config.get("name", "identity")).lower().replace("-", "_").replace("+", "_")
+    name = str(config.get("name", "identity")).lower().replace("+", "_")
     kwargs = dict(config.get("kwargs") or {})
     if name in {"none", "identity", "default"}:
         return IdentityNormalization()
-    if name in {"standard", "standardnorm", "standard_norm", "zscore"}:
+    if name == "standard":
         return StandardNormalization(**kwargs)
-    if name in {"minmax", "min_max"}:
+    if name == "min-max":
         return MinMaxNormalization(**kwargs)
-    if name in {"in_min_max", "imm", "instance_minmax", "instance_min_max"}:
+    if name == "in-min-max":
         return InstanceMinMaxNormalization(**kwargs)
-    if name in {"instance", "instancenorm", "instance_norm"}:
+    if name == "instance":
         kwargs.setdefault("dim", dim)
         kwargs.setdefault("affine", False)
         return RevINNormalization(**kwargs)
-    if name in {"revin", "reversible_instance_norm"}:
+    if name == "revin":
         kwargs.setdefault("dim", dim)
         return RevINNormalization(**kwargs)
-    if name in {"sigmoid", "logistic"}:
+    if name == "sigmoid":
         return SigmoidNormalization(**kwargs)
-    if name in {"tanh", "hyperbolic_tangent"}:
+    if name == "tanh":
         return TanhNormalization(**kwargs)
-    if name in {"relative_mean", "rmean"}:
+    if name == "relative_mean":
         return RelativeMeanNormalization(**kwargs)
-    if name in {"rms", "rms_norm", "rmsnorm"}:
+    if name == "rms":
         return RMSNormalization(**kwargs)
     raise ValueError(f"unknown normalization {name!r}")

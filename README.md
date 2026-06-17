@@ -28,7 +28,7 @@ python -m timetensors.experiment \
   +model.name=dlinear \
   +model.path=dlinear \
   +normalization.name=instance \
-  +training.bs=128 \
+  +training.batch_size=128 \
   +training.epochs=50 \
   +output.dir=outputs/timetensor_models/electricity/168_24 \
   +output.name=dlinear
@@ -47,11 +47,8 @@ Dataset input/output and tensor-building options.
 | Key | Default | Description |
 | --- | --- | --- |
 | `data.path` | `run/dataset` | Directory containing tensor artifacts such as `values.pt`; also the output directory when rebuilding. |
-| `data.built_path` | unset | Alias with priority over `data.path` for loading built tensors. |
-| `data.raw_path` | `data.path` | Directory containing `<data.name>.csv` when rebuilding. |
-| `data.source_path` | unset | Alias for `data.raw_path`. |
+| `data.raw_path` | `.` | Directory containing `<data.name>.csv` when rebuilding. |
 | `data.name` | required for rebuild | CSV stem used as `<data.raw_path>/<data.name>.csv`. |
-| `data.dataset` | unset | Alias for `data.name`. |
 | `data.prefix` | `""` | Prefix for tensor files, producing `<prefix>_values.pt`, etc. |
 | `data.legacy_context_kind` | unset | Interpret legacy `context.pt` as `individual` or `global`. |
 | `data.save_loaded_copy` | `false` | Re-save loaded tensors to `data.path`. |
@@ -62,13 +59,11 @@ CSV-building options used only when `experiment.rebuild_dataset=true`:
 | Key | Default | Description |
 | --- | --- | --- |
 | `data.global_context_cols` | unset | CSV columns moved into global context. |
-| `data.context_cols` | unset | Alias for `data.global_context_cols`. |
 | `data.drop_users` | unset | Series/columns to drop. |
-| `data.drop` | unset | Alias/general drop list. |
+| `data.drop` | unset | Additional CSV columns or rows to drop. |
 | `data.build_individual_ids_context` | `false` | Add individual IDs as individual context. |
 | `data.rename_cols` | unset | Mapping of source column names to display names. |
 | `data.aggr` | unset | Resample aggregation: `sum`, `mean`, `last`, `first`, or `asfreq`. |
-| `data.aggregation` | unset | Alias for `data.aggr`. |
 | `data.aggr_period` | `h` | Pandas resampling period. |
 | `data.users_dim` | `1` | `1` means series are columns; `0` means series are rows. |
 | `data.date_col` | unset | CSV date column to parse and use as index. |
@@ -135,7 +130,6 @@ Valid subset modes are `dates`, `individuals`, and `all`.
 
 | Key | Default | Description |
 | --- | --- | --- |
-| `training.bs` | `32` | Batch size alias. |
 | `training.batch_size` | `32` | Batch size. |
 | `training.epochs` | `1` | Training epochs; `0` skips optimization but still saves/evaluates. |
 | `training.loss` | `MSE` | Training loss config or alias. |
@@ -144,13 +138,16 @@ Valid subset modes are `dates`, `individuals`, and `all`.
 | `training.optimizer` | `adam` | Optimizer name. |
 | `training.optimizer_kwargs` | `{}` | Extra optimizer kwargs. |
 | `training.grad_clip` | unset | Max gradient norm. |
-| `training.eval_freq` | unset | Validation frequency in epochs. |
-| `training.device` | `auto` | Device selector: `auto`, `gpu`, `cuda`, or `cpu`. |
-| `training.eval_runs` | `1` | Fallback for `evaluation.runs`. |
+| `training.log_every_steps` | `1000` | Log recent train loss every N optimizer steps. Also logs at step 1 and the final step. |
+| `training.eval_every_steps` | `100` | Run validation loaders every N optimizer steps. Also evaluates at step 1 and the final step. |
+| `training.device` | `auto` | Device selector: `auto`, `gpu`, `cuda`, or `cpu`. `gpu`/`cuda` fail if CUDA is unavailable; `auto` falls back to CPU. |
+| `training.eval_runs` | `1` | Validation passes during training. |
 | `training.pretrained_path` | unset | Model state dict path. |
-| `training.init` | unset | Alias for `training.pretrained_path`. |
 
 Optimizers: `adam`, `adamw`, `sgd`, `rmsprop`.
+
+During training, validation is run without resetting the seed so random
+training loaders keep their sequence between evaluation passes.
 
 Loss aliases: `MSE`, `MAE`, `nMSE`, `nMAE`, `rMSE`.
 Loss dictionaries may use `name`, `base`, `loss`, `scaling`, `mode`,
@@ -167,11 +164,9 @@ and `mae`/`l1`; scalings are `normal`/`instance`/`std` and
 | `model.specs` | unset | Path to a model YAML file; bypasses inline model fields. |
 | `model.class` | unset | Class name when loading from a Python file. |
 | `model.kwargs` | `{}` | Constructor kwargs. |
-| `model.configs` | `{}` | Alias for `model.kwargs`. |
 | `model.state_dict_path` | unset | State dict to load. |
 | `model.repeat_constant` | `false` | Repeat last value for constant lookbacks. |
 | `model.covariate_augmentation` | unset | Covariate augmentation config. |
-| `model.augmentation` | unset | Alias for `model.covariate_augmentation`. |
 
 Built-in model keys:
 
@@ -200,16 +195,14 @@ Modes: `identity`, `square`, `root`, `sign`, `mirror`, `kernel`, `noise`,
 | --- | --- | --- |
 | `normalization.name` | `identity` | Normalization applied inside `TimeTensorModel`. |
 | `normalization.kwargs` | `{}` | Constructor kwargs for the normalization. |
-| `normalization.configs` | `{}` | Alias for `normalization.kwargs`. |
-
-Canonical normalization names:
+Canonical normalization names. Only these names are accepted:
 
 | Name | Meaning | Important kwargs |
 | --- | --- | --- |
 | `identity` | No normalization. | none |
-| `standard` | Global `(x - mean) / std`. Former aliases such as `standardnorm`, `standard_norm`, and `zscore` were the same thing. | `mean`, `std`, `eps` |
-| `min-max` | Global min-max scaling. Former aliases such as `minmax` and `min_max` were the same thing. | `min_value`, `max_value`, `eps` |
-| `in-min-max` | Per-instance min-max scaling. Former aliases such as `imm`, `instance_minmax`, and `instance_min_max` were the same thing. | `eps`, `detach_stats` |
+| `standard` | Global `(x - mean) / std`. | `mean`, `std`, `eps` |
+| `min-max` | Global min-max scaling. | `min_value`, `max_value`, `eps` |
+| `in-min-max` | Per-instance min-max scaling. | `eps`, `detach_stats` |
 | `instance` | RevIN with `affine=false`. Kept as a convenient name because it is a common baseline. | `eps`, `center`, `detach_stats`, `transform` |
 | `revin` | Reversible instance normalization. Variants such as last-value centering, arcsinh transform, and affine/no-affine are kwargs, not separate names. | `affine`, `center`, `transform`, `eps`, `detach_stats`, `dim` |
 | `sigmoid` | Sigmoid transform with logit inverse. | `eps` |
@@ -244,17 +237,14 @@ internally because that is PyTorch's function name, but the config spelling is
 | `experiment.skip_training` | `false` | Skip training stage. |
 | `experiment.bypass_training_with_pretrained` | `true` | Skip training if pretrained state is supplied. |
 | `experiment.pretrained_path` | unset | State dict path. |
-| `experiment.seed` | `misc.seed` | Random seed alias. |
-
-Legacy aliases still accepted: `experiment.build_dataset`, `data.rebuild`,
-`data.build`, and `experiment.skip_dataset_build`.
+| `experiment.seed` | unset | Random seed. |
 
 ### `evaluation`
 
 | Key | Default | Description |
 | --- | --- | --- |
 | `evaluation.splits` | all loader splits | Split name or list of split names to evaluate. |
-| `evaluation.runs` | `training.eval_runs` or `1` | Repeated evaluation passes. |
+| `evaluation.runs` | `1` | Repeated evaluation passes for final evaluation. |
 | `evaluation.plot_example` | `false` | Generate an example prediction plot. |
 | `evaluation.save_example_plot` | `false` | Save example plot to `example_prediction.pdf`. |
 
@@ -262,8 +252,8 @@ Legacy aliases still accepted: `experiment.build_dataset`, `data.rebuild`,
 
 | Key | Default | Description |
 | --- | --- | --- |
-| `output.dir` | `misc.output_dir` or `outputs` | Parent output directory. |
-| `output.name` | `misc.save_name` or `model.name` | Run directory name under `output.dir`. |
+| `output.dir` | `outputs` | Parent output directory. |
+| `output.name` | `model.name` | Run directory name under `output.dir`. |
 
 The run directory is:
 
@@ -279,10 +269,6 @@ Saved artifacts include `model_state.pt`, `train_history.pt`,
 
 | Key | Default | Description |
 | --- | --- | --- |
-| `misc.seed` | unset | Random seed. |
-| `misc.device` | `auto` | Fallback device selector. |
-| `misc.output_dir` | `outputs` | Fallback for `output.dir`. |
-| `misc.save_name` | `model.name` | Fallback for `output.name`. |
 | `misc.log_level` | `INFO` | Python logging level. |
 
 ### Hydra
@@ -342,4 +328,5 @@ Device selected: requested=auto resolved=cuda:0 {'cuda_available': True, ...}
 ```
 
 If `resolved=cpu` or `cuda_available=False`, PyTorch did not find a usable GPU
-inside that job.
+inside that job. Slurm scripts pass `+training.device=gpu`, so CUDA problems
+fail fast with diagnostics instead of silently training on CPU.

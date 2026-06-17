@@ -38,7 +38,8 @@ for dataset in "${DATASETS[@]}"; do
         +data.sampling.eval_idx_mode=all \
         +data.sampling.train_stride=1 \
         +data.sampling.eval_stride="$H" \
-        +training.bs=128 \
+        +training.batch_size=128 \
+        +training.device=gpu \
         +training.epochs=50 \
         +training.loss=MSE \
         +model.name=patchtst \
@@ -46,7 +47,7 @@ for dataset in "${DATASETS[@]}"; do
         +normalization.name=instance \
         +experiment.rebuild_dataset="$rebuild_dataset" \
         +experiment.evaluate=true \
-        +misc.seed="$SEED" \
+        +experiment.seed="$SEED" \
         +output.dir="${OUT_ROOT}/${dataset}/${L}_${H}" \
         +output.name="patchtst_sampling_${sampling_name}"
       rebuild_dataset=false

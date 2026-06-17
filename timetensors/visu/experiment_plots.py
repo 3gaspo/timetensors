@@ -38,14 +38,16 @@ def plot_losses(train_losses, valid=None, title: str = "Training losses", logsca
     for name, values in (valid or {}).items():
         if isinstance(values, list) and values and isinstance(values[0], dict):
             keys = sorted(values[0]["losses"]) if "losses" in values[0] else []
+            steps = [value.get("step", index + 1) for index, value in enumerate(values)]
             for key in keys:
-                ax.plot([value["losses"][key] for value in values], label=f"{name}:{key}")
+                losses = [float(value["losses"][key]) for value in values]
+                ax.plot(steps, losses, marker="o", label=f"{name}:{key}")
         else:
             ax.plot(values, label=name)
     if logscale:
         ax.set_yscale("log")
     ax.set_title(title)
-    ax.set_xlabel("step / eval point")
+    ax.set_xlabel("optimizer step")
     ax.set_ylabel("loss")
     ax.legend(frameon=False)
     return fig

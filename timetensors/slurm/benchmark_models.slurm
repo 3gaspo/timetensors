@@ -39,7 +39,8 @@ for dataset in "${DATASETS[@]}"; do
         +data.sampling.train_idx_mode=random \
         +data.sampling.eval_idx_mode=all \
         +data.sampling.eval_stride="$EVAL_STRIDE" \
-        +training.bs=128 \
+        +training.batch_size=128 \
+        +training.device=gpu \
         +training.epochs="$epochs" \
         +training.loss=MSE \
         +model.name="$model" \
