@@ -191,7 +191,7 @@ class Chronos(nn.Module):
             return None, None
         past = covariates.get("past")
         future = covariates.get("future")
-        if self.context_mode in {"structured", "any"}:
+        if self.context_mode == "structured":
             joined_future = None
             if future is not None:
                 future_prefix = self._future_prefix(past, future)
@@ -199,7 +199,7 @@ class Chronos(nn.Module):
             return past, joined_future
         if self.context_mode == "past_only":
             return past, None
-        if self.context_mode == "future":
+        if self.context_mode == "future_included":
             if future is None:
                 return None, None
             future_prefix = self._future_prefix(past, future)

@@ -38,15 +38,10 @@ BASELINE_REGISTRY = {
     "lookback": LookbackBaseline,
     "linear": LinearBaseline,
     "periodic_linear": PeriodicLinearBaseline,
-    "period": PeriodicLinearBaseline,
     "dlinear": DLinear,
-    "DLinear": DLinear,
     "patchtst": PatchTST,
-    "PatchTST": PatchTST,
     "chronos": Chronos,
-    "Chronos": Chronos,
     "tabpfn": TabPFN,
-    "TabPFN": TabPFN,
 }
 
 
@@ -224,8 +219,7 @@ class ModelConfig:
             class_name=data.get("class"),
             kwargs=data.get("kwargs") or {},
             normalization=data.get("normalization"),
-            covariate_augmentation=data.get("covariate_augmentation")
-            or data.get("augmentation"),
+            covariate_augmentation=data.get("covariate_augmentation"),
             repeat_constant=bool(data.get("repeat_constant", False)),
             state_dict_path=data.get("state_dict_path"),
         )

@@ -200,7 +200,6 @@ class RevINNormalization(nn.Module):
             if transform is None
             else str(transform).lower().replace("-", "_")
         )
-        transform = None if transform in {None, "none", "identity"} else transform
         if transform not in {None, "arcsinh"}:
             raise ValueError("transform must be None or 'arcsinh'")
         self.dim = None if dim is None else int(dim)
@@ -371,9 +370,9 @@ def build_normalization(
     """Build a normalization module from a small config dictionary."""
     if config is None:
         return IdentityNormalization()
-    name = str(config.get("name", "identity")).lower().replace("+", "_")
+    name = str(config.get("name", "identity"))
     kwargs = dict(config.get("kwargs") or {})
-    if name in {"none", "identity", "default"}:
+    if name == "identity":
         return IdentityNormalization()
     if name == "standard":
         return StandardNormalization(**kwargs)
@@ -388,7 +387,7 @@ def build_normalization(
     if name == "revin":
         kwargs.setdefault("dim", dim)
         return RevINNormalization(**kwargs)
-    if name in {"grevin", "grevin_normalization", "generalized_revin", "cmin", "previn", "personalized_revin"}:
+    if name in {"grevin", "cmin", "previn"}:
         if dim is None:
             raise ValueError(f"{name!r} normalization requires dim")
         init_from_stats = bool(kwargs.pop("init_from_stats", False))

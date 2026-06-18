@@ -87,7 +87,7 @@ def train_stage(
     )
     training = section(config, "training")
     criterion, eval_losses = get_losses(
-        training.get("loss", "MSE"),
+        training.get("loss", "mse"),
         complete_evaluation=bool(training.get("complete_evaluation", True)),
     )
     learner = TorchLearner(

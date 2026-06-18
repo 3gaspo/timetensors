@@ -195,9 +195,9 @@ class TabPFN(nn.Module):
             future = static_future if future is None else torch.cat([future, static_future], dim=1)
         if self.context_mode == "past_only":
             return past, None
-        if self.context_mode in {"structured", "any"}:
+        if self.context_mode == "structured":
             return past, self._join_future_context(past, future)
-        if self.context_mode == "future":
+        if self.context_mode == "future_included":
             return None, self._join_future_context(past, future)
         raise ValueError(f"unknown context_mode={self.context_mode!r}")
 

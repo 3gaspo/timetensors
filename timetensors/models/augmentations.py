@@ -25,12 +25,9 @@ def _expand_mode_specs(raw_modes: list) -> list:
     for item in raw_modes:
         if isinstance(item, str):
             text = item.strip()
-            if text.lower() in {"", "none", "false"}:
+            if not text:
                 continue
-            if text.lower() == "all":
-                specs.extend(["kernel", "square", "root", "sign", "mirror"])
-            else:
-                specs.extend(part for part in text.split("-") if part)
+            specs.extend(part for part in text.split("-") if part)
         else:
             specs.append(item)
     return specs
@@ -38,9 +35,9 @@ def _expand_mode_specs(raw_modes: list) -> list:
 
 def _parse_mode_spec(spec) -> dict[str, object]:
     if isinstance(spec, Mapping):
-        mode = spec.get("name", spec.get("mode", spec.get("type")))
+        mode = spec.get("name")
         if mode is None:
-            raise ValueError("covariate augmentation spec requires 'name' or 'mode'")
+            raise ValueError("covariate augmentation spec requires 'name'")
         mode = str(mode)
         value = spec.get("value")
         if value is None and mode == "noise":
@@ -206,7 +203,7 @@ def normalize_covariates(
 
 
 class CovariateAugmentation(nn.Module):
-    """Append lookback-derived transforms of ``x`` to past covariates."""
+    """Append generated covariates to past and optionally future covariates."""
 
     def __init__(
         self,
@@ -304,11 +301,11 @@ class CovariateAugmentation(nn.Module):
         return structured
 
     def _generated_length(self, x: torch.Tensor, horizon: int, target: str) -> int:
-        if target == "future":
+        if target == "future_included":
             return x.shape[-1] + horizon
-        if target in {"past_only", "past"}:
+        if target == "past_only":
             return x.shape[-1]
-        raise ValueError("target must be 'past_only', 'past', or 'future'")
+        raise ValueError("target must be 'past_only' or 'future_included'")
 
     def _randn(self, x: torch.Tensor, *, horizon: int, target: str) -> torch.Tensor:
         return torch.randn(
@@ -365,5 +362,5 @@ def build_covariate_augmentation(config: dict | None) -> CovariateAugmentation:
     if config is None:
         return CovariateAugmentation()
     kwargs = dict(config.get("kwargs") or {})
-    modes = config.get("modes", config.get("mode"))
+    modes = config.get("modes")
     return CovariateAugmentation(modes=modes, **kwargs)

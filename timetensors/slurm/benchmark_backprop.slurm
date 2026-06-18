@@ -18,7 +18,7 @@ STATS_ARGS=()
 [ -n "${STATS_MAX_WINDOWS:-}" ] && STATS_ARGS+=(+experiment.stats_max_windows="$STATS_MAX_WINDOWS")
 DATASETS=("electricity" "traffic")
 SETTINGS=("168 24" "672 168")
-LOSSES=("MSE" "nMSE" "MAE" "nMAE" "rMSE")
+LOSSES=("mse" "nmse" "mae" "nmae" "rmse")
 OPTIMS=("adam" "adamw" "sgd")
 
 for dataset in "${DATASETS[@]}"; do

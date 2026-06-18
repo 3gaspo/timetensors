@@ -77,9 +77,8 @@ Controls train/validation/test temporal and individual splits.
 | --- | --- | --- |
 | `date_splits` | `[0.6,0.2,0.2]` | Temporal split ratios; one to three positive values summing to 1. |
 | `indiv_split` | `1.0` | Fraction of individuals kept per split. |
-| `reshuffle` | `true` | Reshuffle generated split assignments. |
 | `shuffle_individuals` | `true` | Randomize individual split membership. |
-| `by_cluster` / `by_group` | unset | Per-cluster/per-group overrides. |
+| `by_cluster` | unset | Per-cluster overrides. |
 
 ### `data.sampling` or top-level `sampling`
 
@@ -115,7 +114,7 @@ Optional subsampling on top of train/eval splits.
 | `modes.<split>` | unset | Per-split subset mode. |
 | `sizes.<split>` | `1.0` | Ratio of candidates to keep for a split. |
 | `specs.<split>` | unset | Precomputed indices or `{mode, indices, stride}`. |
-| `by_cluster` / `by_group` | unset | Per-cluster/per-group overrides. |
+| `by_cluster` | unset | Per-cluster overrides. |
 
 Valid subset modes are `dates`, `individuals`, and `all`.
 
@@ -132,8 +131,8 @@ Valid subset modes are `dates`, `individuals`, and `all`.
 | --- | --- | --- |
 | `training.batch_size` | `32` | Batch size. |
 | `training.epochs` | `1` | Training epochs; `0` skips optimization but still saves/evaluates. |
-| `training.loss` | `MSE` | Training loss config or alias. |
-| `training.complete_evaluation` | `true` | Include extra eval metrics beyond `MSE` and `nMSE`. |
+| `training.loss` | `mse` | Training loss config. |
+| `training.complete_evaluation` | `true` | Include extra eval metrics beyond `mse` and `nmse`. |
 | `training.lr` | `1e-3` | Learning rate. |
 | `training.optimizer` | `adam` | Optimizer name. |
 | `training.optimizer_kwargs` | `{}` | Extra optimizer kwargs. |
@@ -149,11 +148,10 @@ Optimizers: `adam`, `adamw`, `sgd`, `rmsprop`.
 During training, validation is run without resetting the seed so random
 training loaders keep their sequence between evaluation passes.
 
-Loss aliases: `MSE`, `MAE`, `nMSE`, `nMAE`, `rMSE`.
-Loss dictionaries may use `name`, `base`, `loss`, `scaling`, `mode`,
-`normalization`, `reduction`, `eps`, and `kwargs`. Base losses are `mse`/`l2`
-and `mae`/`l1`; scalings are `normal`/`instance`/`std` and
-`relative_mean`/`rmean`.
+Loss names: `mse`, `mae`, `nmse`, `nmae`, `rmse`.
+Loss dictionaries may use `name`, `base`, `scaling`, `reduction`, `eps`, and
+`kwargs`. Base losses are `mse` and `mae`; scalings are `normal` and
+`relative_mean`.
 
 ### `model`
 
@@ -171,8 +169,7 @@ and `mae`/`l1`; scalings are `normal`/`instance`/`std` and
 Built-in model keys:
 
 `persistence`, `expected`, `repeat`, `lookback`, `linear`,
-`periodic_linear`, `period`, `dlinear`, `DLinear`, `patchtst`, `PatchTST`,
-`chronos`, `Chronos`, `tabpfn`, `TabPFN`.
+`periodic_linear`, `dlinear`, `patchtst`, `chronos`, `tabpfn`.
 
 Inline model kwargs automatically receive `lags`, `dim`, and `horizon` where
 needed.
@@ -193,18 +190,20 @@ Useful SOTA kwargs:
 | `chronos` | `cross_learning` | Forwarded to `pipeline.predict(...)`. |
 | `chronos` | `shared_context` | Treat context batches as shared across forecast samples. |
 | `chronos` | `device_map` | Chronos loading device map, usually `cuda` or `cpu`. |
+| `chronos` | `context_mode` | `structured`, `past_only`, or `future_included`. |
 | `tabpfn` | `weights_path` | Local TabPFN checkpoint path. If unset, the wrapper first checks the new package path, then the legacy `timetensors_old` path. |
 | `tabpfn` | `cross_learning` | Fit one tabular regressor over the whole batch instead of one fit per sample. |
 | `tabpfn` | `dimension_encoding` | `ordinal` or `one-hot` series identity features. |
 | `tabpfn` | `context_as_features` | Use future-known covariates as tabular features instead of extra training rows. |
 | `tabpfn` | `use_time_features` | Add normalized time index and seasonal sine/cosine features. |
+| `tabpfn` | `context_mode` | `structured`, `past_only`, or `future_included`. |
 
 ### `model.covariate_augmentation`
 
 | Key | Default | Description |
 | --- | --- | --- |
-| `mode` / `modes` | none | Augmentation modes. A dash-separated string is accepted for simple transforms, or use a list of structured specs. |
-| `kwargs.target` | `past_only` | `past_only` appends generated covariates only over the lookback. `future` creates generated covariates over lookback plus horizon and splits them into past/future entries. |
+| `modes` | none | Augmentation modes. A dash-separated string is accepted for simple transforms, or use a list of structured specs. |
+| `kwargs.target` | `past_only` | `past_only` appends generated covariates only over the lookback. `future_included` creates generated covariates over lookback plus horizon and splits them into past/future entries. |
 | `kwargs.noise_scale` | `1.0` | Scale for `noise` mode. |
 | `kwargs.constant_value` | `1.0` | Value for `constant` mode. |
 | `kwargs.kernel_size` | `5` | Odd smoothing kernel size for `kernel` mode. |
@@ -216,10 +215,11 @@ structured specs:
 
 ```bash
 +model.covariate_augmentation.modes='[{name:noise,count:3,value:1.0,target:past_only}]'
-+model.covariate_augmentation.modes='[{name:constant,count:2,value:0.0,target:future}]'
++model.covariate_augmentation.modes='[{name:constant,count:2,value:0.0,target:future_included}]'
++model.covariate_augmentation.modes='[{name:noise,count:2,value:0.1,target:past_only},{name:constant,count:1,value:1.0,target:future_included}]'
 ```
 
-Each spec accepts `name` or `mode`, `count`, `value`, and optional `target`.
+Each spec accepts `name`, `count`, `value`, and optional `target`.
 `target` defaults to `model.covariate_augmentation.kwargs.target`.
 
 ### `normalization`
@@ -416,7 +416,9 @@ Scripts live in `timetensors/slurm/` and use these shell variables:
 | `CHRONOS_DEVICE_MAP` | `cuda` | Chronos loading device map. |
 | `TABPFN_WEIGHTS_PATH` | unset | Optional TabPFN checkpoint path. |
 | `TABPFN_DEVICE` | `cuda` | TabPFN regressor device. |
-| `AUGMENT_TARGET` | `past_only` | Generated covariate target for `benchmark_chronos_covariates.slurm`; use `future` to include horizon-known covariates. |
+
+`benchmark_chronos_covariates.slurm` defines explicit augmentation specs in
+its `AUGMENTS` array, including mixed `past_only` and `future_included` runs.
 
 Submit from the repository root:
 

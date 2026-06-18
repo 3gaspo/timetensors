@@ -15,9 +15,9 @@ from .normalizations import get_normal_stats
 def _criterion(name: str, *, reduction: str = "mean", kwargs: Mapping[str, Any] | None = None) -> nn.Module:
     kwargs = dict(kwargs or {})
     name = name.lower()
-    if name in {"mse", "l2"}:
+    if name == "mse":
         return nn.MSELoss(reduction=reduction, **kwargs)
-    if name in {"mae", "l1"}:
+    if name == "mae":
         return nn.L1Loss(reduction=reduction, **kwargs)
     raise ValueError(f"unknown base loss {name!r}")
 
@@ -26,7 +26,7 @@ def _criterion(name: str, *, reduction: str = "mean", kwargs: Mapping[str, Any] 
 class LossConfig:
     """Configuration for a forecasting loss."""
 
-    name: str = "MSE"
+    name: str = "mse"
     base: str = "mse"
     scaling: str | None = None
     reduction: str = "mean"
@@ -41,9 +41,9 @@ class LossConfig:
             return config_to_loss_config(config)
         data = dict(config)
         return cls(
-            name=str(data.get("name", data.get("base", "MSE"))),
-            base=str(data.get("base", data.get("loss", "mse"))),
-            scaling=data.get("scaling", data.get("mode", data.get("normalization"))),
+            name=str(data.get("name", data.get("base", "mse"))),
+            base=str(data.get("base", "mse")),
+            scaling=data.get("scaling"),
             reduction=str(data.get("reduction", "mean")),
             eps=float(data.get("eps", 1e-8)),
             kwargs=data.get("kwargs"),
@@ -76,7 +76,7 @@ class LossWrapper(nn.Module):
     @staticmethod
     def _default_name(base_loss: str | nn.Module, scaling: str | None) -> str:
         base = base_loss if isinstance(base_loss, str) else base_loss.__class__.__name__
-        return str(base) if scaling in {None, "none", "raw"} else f"{scaling}_{base}"
+        return str(base) if scaling is None else f"{scaling}_{base}"
 
     def forward(
         self,
@@ -100,14 +100,14 @@ class LossWrapper(nn.Module):
         std: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         scaling = self.scaling
-        if scaling in {None, "none", "raw"}:
+        if scaling is None:
             return pred, target
-        if scaling in {"normal", "norm", "instance", "std", "n"}:
+        if scaling == "normal":
             _, scale = self._context_stats(context, mean, std, require_std=True)
             assert scale is not None
             scale = scale.abs() + self.eps
             return pred / scale, target / scale
-        if scaling in {"relative", "relative_mean", "rmean", "r"}:
+        if scaling == "relative_mean":
             center, _ = self._context_stats(context, mean, std, require_std=False)
             scale = center.abs() + self.eps
             return pred / scale, target / scale
@@ -130,17 +130,17 @@ class LossWrapper(nn.Module):
 
 
 def config_to_loss_config(name: str) -> LossConfig:
-    key = name.lower()
-    aliases = {
-        "mse": LossConfig(name="MSE", base="mse"),
-        "mae": LossConfig(name="MAE", base="mae"),
-        "nmse": LossConfig(name="nMSE", base="mse", scaling="normal"),
-        "nmae": LossConfig(name="nMAE", base="mae", scaling="normal"),
-        "rmse": LossConfig(name="rMSE", base="mse", scaling="relative_mean"),
+    key = str(name)
+    configs = {
+        "mse": LossConfig(name="mse", base="mse"),
+        "mae": LossConfig(name="mae", base="mae"),
+        "nmse": LossConfig(name="nmse", base="mse", scaling="normal"),
+        "nmae": LossConfig(name="nmae", base="mae", scaling="normal"),
+        "rmse": LossConfig(name="rmse", base="mse", scaling="relative_mean"),
     }
-    if key not in aliases:
+    if key not in configs:
         raise ValueError(f"unknown loss config {name!r}")
-    return aliases[key]
+    return configs[key]
 
 
 def build_loss(config: Mapping[str, Any] | str | LossConfig | LossWrapper | None) -> LossWrapper:
@@ -158,15 +158,15 @@ def build_loss(config: Mapping[str, Any] | str | LossConfig | LossWrapper | None
 
 
 def get_losses(
-    criterion_name: str | Mapping[str, Any] = "MSE",
+    criterion_name: str | Mapping[str, Any] = "mse",
     *,
     complete_evaluation: bool = False,
 ) -> tuple[LossWrapper, dict[str, LossWrapper]]:
     """Return a training criterion and common elementwise evaluation losses."""
     criterion = build_loss(LossConfig.from_dict(criterion_name))
-    eval_names = ["MSE", "nMSE"]
+    eval_names = ["mse", "nmse"]
     if complete_evaluation:
-        eval_names.extend(["MAE", "nMAE", "rMSE"])
+        eval_names.extend(["mae", "nmae", "rmse"])
     if criterion.name not in eval_names:
         eval_names.append(criterion.name)
     eval_losses = {}

@@ -261,7 +261,7 @@ class TorchLearner:
         self.model = model.to(resolved_device)
         self.device = next(self.model.parameters(), torch.empty(0, device=resolved_device)).device
         self.criterion = build_loss(criterion)
-        self.eval_losses = dict(eval_losses or get_losses("MSE")[1])
+        self.eval_losses = dict(eval_losses or get_losses("mse")[1])
         self.lr = float(lr)
         self.grad_clip = None if grad_clip is None else float(grad_clip)
         self.optimizer_factory = optimizer

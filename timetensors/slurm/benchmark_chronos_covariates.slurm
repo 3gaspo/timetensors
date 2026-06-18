@@ -21,25 +21,27 @@ DATASETS=("electricity" "traffic" "solar" "exchange_rate")
 SETTINGS=("1344 336" "672 168" "168 24" "24 24")
 EVAL_STRIDE="${EVAL_STRIDE:-512}"
 BATCH_SIZE="${SOTA_BATCH_SIZE:-350}"
-AUGMENT_TARGET="${AUGMENT_TARGET:-past_only}"
 
 MODEL_ARGS=(+model.kwargs.device_map="${CHRONOS_DEVICE_MAP:-cuda}")
 [ -n "${CHRONOS_WEIGHTS_PATH:-}" ] && MODEL_ARGS+=(+model.kwargs.weights_path="$CHRONOS_WEIGHTS_PATH")
 
-# Format: output_suffix kind count value
+# Format: output_suffix|hydra_modes
 AUGMENTS=(
-  "none none 0 0"
-  "noise_0p01 noise 1 0.01"
-  "noise_0p1 noise 1 0.1"
-  "noise_1 noise 1 1.0"
-  "noise_1_x2 noise 2 1.0"
-  "noise_1_x3 noise 3 1.0"
-  "noise_1_x5 noise 5 1.0"
-  "constant_0 constant 1 0.0"
-  "constant_1 constant 1 1.0"
-  "constant_0_x2 constant 2 0.0"
-  "constant_0_x3 constant 3 0.0"
-  "constant_0_x5 constant 5 0.0"
+  "none|"
+  "noise_0p01_past|[{name:noise,count:1,value:0.01,target:past_only}]"
+  "noise_0p1_past|[{name:noise,count:1,value:0.1,target:past_only}]"
+  "noise_1_past|[{name:noise,count:1,value:1.0,target:past_only}]"
+  "noise_1_x2_past|[{name:noise,count:2,value:1.0,target:past_only}]"
+  "noise_1_x3_past|[{name:noise,count:3,value:1.0,target:past_only}]"
+  "noise_1_x5_past|[{name:noise,count:5,value:1.0,target:past_only}]"
+  "constant_0_past|[{name:constant,count:1,value:0.0,target:past_only}]"
+  "constant_1_past|[{name:constant,count:1,value:1.0,target:past_only}]"
+  "constant_0_x2_past|[{name:constant,count:2,value:0.0,target:past_only}]"
+  "constant_0_x3_past|[{name:constant,count:3,value:0.0,target:past_only}]"
+  "constant_0_x5_past|[{name:constant,count:5,value:0.0,target:past_only}]"
+  "noise_0p1_future|[{name:noise,count:1,value:0.1,target:future_included}]"
+  "constant_1_future|[{name:constant,count:1,value:1.0,target:future_included}]"
+  "noise_0p1_past_constant_1_future|[{name:noise,count:1,value:0.1,target:past_only},{name:constant,count:1,value:1.0,target:future_included}]"
 )
 
 for dataset in "${DATASETS[@]}"; do
@@ -48,11 +50,11 @@ for dataset in "${DATASETS[@]}"; do
   for setting in "${SETTINGS[@]}"; do
     read -r L H <<< "$setting"
     for augment in "${AUGMENTS[@]}"; do
-      read -r suffix kind count value <<< "$augment"
+      IFS='|' read -r suffix augment_spec <<< "$augment"
       augment_args=()
-      if [ "$kind" != "none" ]; then
+      if [ -n "$augment_spec" ]; then
         augment_args+=(
-          "+model.covariate_augmentation.modes=[{name:${kind},count:${count},value:${value},target:${AUGMENT_TARGET}}]"
+          "+model.covariate_augmentation.modes=${augment_spec}"
         )
       fi
 
@@ -75,7 +77,7 @@ for dataset in "${DATASETS[@]}"; do
         +training.batch_size="$BATCH_SIZE" \
         +training.device=gpu \
         +training.epochs=0 \
-        +training.loss=MSE \
+        +training.loss=mse \
         +model.name=chronos \
         +model.path=chronos \
         "${MODEL_ARGS[@]}" \
@@ -87,7 +89,7 @@ for dataset in "${DATASETS[@]}"; do
         +experiment.evaluate=true \
         +experiment.seed="${SEED:-1}" \
         +output.dir="${OUT_ROOT}/${dataset}/${L}_${H}" \
-        +output.name="chronos_${suffix}_${AUGMENT_TARGET}" \
+        +output.name="chronos_${suffix}" \
         hydra.run.dir='outputs/hydra/${now:%Y-%m-%d}/${now:%H-%M-%S}'
       rebuild_dataset=false
     done

@@ -65,7 +65,7 @@ for dataset in "${DATASETS[@]}"; do
         +training.batch_size="$batch_size" \
         +training.device=gpu \
         +training.epochs="$epochs" \
-        +training.loss=MSE \
+        +training.loss=mse \
         +model.name="$model" \
         +model.path="$model" \
         "${model_args[@]}" \

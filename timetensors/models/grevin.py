@@ -437,14 +437,10 @@ def build_grevin_normalization(
 ) -> GRevINNormalization:
     """Build a Grevin-family normalization by preset name."""
 
-    key = mode.lower().replace("-", "_")
-    if key in {"grevin", "grevin_normalization", "generalized_revin"}:
+    key = str(mode)
+    if key == "grevin":
         module = GRevINNormalization(dim, **kwargs)
-    elif key in {"in", "instance"}:
-        module = GRevINNormalization.build_in(dim, **kwargs)
-    elif key == "revin":
-        module = GRevINNormalization.build_revin(dim, **kwargs)
-    elif key in {"previn", "personalized_revin"}:
+    elif key == "previn":
         module = GRevINNormalization.build_personalized_revin(dim, **kwargs)
     elif key == "cmin":
         module = GRevINNormalization.build_cmin(dim, **kwargs)

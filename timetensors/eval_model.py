@@ -150,7 +150,7 @@ def eval_stage(
     shape = tuple(get_sizes(loaders))
     training = section(config, "training")
     criterion, eval_losses = get_losses(
-        training.get("loss", "MSE"),
+        training.get("loss", "mse"),
         complete_evaluation=bool(training.get("complete_evaluation", True)),
     )
     if learner is None:

@@ -75,8 +75,8 @@ def recompute_stats(config: Mapping[str, Any]) -> bool:
 def normalization_needs_stats(config: Mapping[str, Any]) -> bool:
     """Return whether model construction needs loader statistics."""
     normalization = section(config, "normalization")
-    name = str(normalization.get("name", "identity")).lower().replace("+", "_")
-    if name not in {"grevin", "grevin_normalization", "generalized_revin", "cmin", "previn", "personalized_revin"}:
+    name = str(normalization.get("name", "identity"))
+    if name not in {"grevin", "cmin", "previn"}:
         return False
     kwargs = dict(normalization.get("kwargs") or {})
     if kwargs.get("stats") is not None:
@@ -134,7 +134,6 @@ def default_splits(config: Mapping[str, Any]) -> dict[str, Any]:
     splits = dict(data.get("splits") or section(config, "splits"))
     splits.setdefault("date_splits", [0.6, 0.2, 0.2])
     splits.setdefault("indiv_split", 1.0)
-    splits.setdefault("reshuffle", True)
     return splits
 
 
@@ -206,7 +205,7 @@ def model_specs(config: Mapping[str, Any], shape: tuple[int, int, int]) -> str |
         kwargs.setdefault("dim", dim)
         kwargs.setdefault("horizon", horizon)
     normalization = section(config, "normalization")
-    if normalization.get("name") in {None, "None", "none"} and not normalization.get("kwargs"):
+    if normalization.get("name") is None and not normalization.get("kwargs"):
         normalization_config = None
     else:
         normalization_config = {

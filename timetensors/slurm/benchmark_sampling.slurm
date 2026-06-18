@@ -44,7 +44,7 @@ for dataset in "${DATASETS[@]}"; do
         +training.batch_size=128 \
         +training.device=gpu \
         +training.epochs=50 \
-        +training.loss=MSE \
+        +training.loss=mse \
         +model.name=patchtst \
         +model.path=patchtst \
         +normalization.name=instance \

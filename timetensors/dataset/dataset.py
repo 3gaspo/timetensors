@@ -1468,7 +1468,13 @@ def _coerce_split_specs(raw: Mapping[str, Any]) -> Dict[str, SplitSpec]:
     return specs
 
 
+def _reject_removed_group_alias(options: Optional[Mapping[str, Any]]) -> None:
+    if options is not None and "by_group" in options:
+        raise ValueError("by_group was removed; use by_cluster")
+
+
 def _precomputed_split_specs(options: Mapping[str, Any]) -> Optional[Dict[str, SplitSpec]]:
+    _reject_removed_group_alias(options)
     raw = options.get("specs")
     if raw is None and options and all(
         isinstance(value, (SplitSpec, Mapping))
@@ -1477,12 +1483,12 @@ def _precomputed_split_specs(options: Mapping[str, Any]) -> Optional[Dict[str, S
             or {"individual_indices", "date_indices"} <= set(value)
         )
         for key, value in options.items()
-        if key not in {"by_cluster", "by_group"}
+        if key != "by_cluster"
     ):
         raw = {
             key: value
             for key, value in options.items()
-            if key not in {"by_cluster", "by_group"}
+            if key != "by_cluster"
         }
     return None if raw is None else _coerce_split_specs(raw)
 
@@ -1572,6 +1578,7 @@ def get_dataset_splits(
     seed: Optional[int | str] = None,
     legacy_context_kind: Optional[str] = None,
 ) -> Dict[str, TimeSeriesData]:
+    _reject_removed_group_alias(splits)
     if data is None:
         if data_path is None:
             raise ValueError("data_path is required when data is not provided")
@@ -2358,8 +2365,9 @@ def _group_options(
     group: str,
 ) -> Dict[str, Any]:
     """Merge common options with an optional per-cluster override."""
+    _reject_removed_group_alias(options)
     options = dict(options or {})
-    overrides = options.pop("by_cluster", None) or options.pop("by_group", None) or {}
+    overrides = options.pop("by_cluster", None) or {}
     group_options = overrides.get(group, {})
     merged = dict(options)
     for key in ("date_splits", "indiv_split"):
@@ -2521,6 +2529,7 @@ def get_train_loaders(
     seed: Optional[int | str] = None,
 ) -> Dict[str, DataLoader]:
     subsets = subsets or {}
+    _reject_removed_group_alias(subsets)
     subset_modes = subsets.get("modes") or {}
     subset_sizes = {
         key: float(value) for key, value in (subsets.get("sizes") or {}).items()
