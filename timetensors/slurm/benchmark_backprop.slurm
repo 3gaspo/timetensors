@@ -37,12 +37,12 @@ for dataset in "${DATASETS[@]}"; do
           +task.lags="$L" \
           +task.horizon="$H" \
           +data.splits.date_splits=[0.6,0.2,0.2] \
-          +data.sampling.train_idx_mode=random \
+          +data.sampling.train_idx_mode=individuals \
           +data.sampling.eval_idx_mode=all \
           +data.sampling.eval_stride="$H" \
           +training.batch_size=256 \
           +training.device=gpu \
-          +training.epochs=50 \
+          +training.epochs=200 \
           +training.loss="$loss" \
           +training.optimizer="$optim" \
           +training.lr="$lr" \

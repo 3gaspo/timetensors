@@ -45,7 +45,7 @@ class LearnerConfig:
     optimizer: str = "adam"
     optimizer_kwargs: Mapping[str, Any] | None = None
     grad_clip: float | None = None
-    epochs: int = 1
+    epochs: int = 200
 
     @classmethod
     def from_dict(cls, config: Mapping[str, Any] | None) -> "LearnerConfig":
@@ -56,7 +56,7 @@ class LearnerConfig:
             optimizer=str(data.get("optimizer", "adam")),
             optimizer_kwargs=data.get("optimizer_kwargs", data.get("kwargs")),
             grad_clip=data.get("grad_clip"),
-            epochs=int(data.get("epochs", 1)),
+            epochs=int(data.get("epochs", 200)),
         )
 
     @classmethod
@@ -365,7 +365,7 @@ class TorchLearner:
         self,
         train_loader: Iterable[Any],
         *,
-        epochs: int = 1,
+        epochs: int = 200,
         valid_loaders: Mapping[str, Iterable[Any]] | None = None,
         eval_every_steps: int | None = 100,
         log_every_steps: int | None = 1000,
@@ -618,7 +618,7 @@ def train_model(
     learner: TorchLearner,
     loaders: Mapping[str, Iterable[Any]] | Iterable[Any],
     *,
-    epochs: int = 1,
+    epochs: int = 200,
     eval_every_steps: int | None = 100,
     log_every_steps: int | None = 1000,
     eval_runs: int = 1,

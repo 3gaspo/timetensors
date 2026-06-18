@@ -36,6 +36,16 @@ from .runtime import (
 LOGGER = logging.getLogger(__name__)
 
 
+def _log_loader_sizes(loaders: Mapping[str, Any]) -> None:
+    try:
+        shape, split_info, batch_info = get_sizes(loaders, str_info=True)
+        LOGGER.info("data_shape=%s", shape)
+        LOGGER.info("%s", split_info)
+        LOGGER.info("%s", batch_info)
+    except Exception as exc:
+        LOGGER.debug("could not log loader sizes: %s", exc)
+
+
 def _fetch_loaders(config: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     lags, horizon = task_shape(config)
     data_cfg = section(config, "data")
@@ -96,7 +106,15 @@ def train_stage(
         optimizer_kwargs=training.get("optimizer_kwargs"),
         grad_clip=training.get("grad_clip"),
     )
-    epochs = int(training.get("epochs", 1))
+    requested_device = device(config)
+    LOGGER.info(
+        "device requested=%s resolved=%s cuda=%s",
+        requested_device,
+        learner.device,
+        str(learner.device).startswith("cuda"),
+    )
+    _log_loader_sizes(loaders)
+    epochs = int(training.get("epochs", 200))
     trainable = any(param.requires_grad for param in learner.model.parameters())
     if epochs > 0 and trainable:
         history = learner.fit(

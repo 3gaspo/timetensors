@@ -28,7 +28,7 @@ for dataset in "${DATASETS[@]}"; do
   for setting in "${SETTINGS[@]}"; do
     read -r L H <<< "$setting"
     for model in "${MODELS[@]}"; do
-      epochs=100
+      epochs=200
       if [[ "$model" =~ ^(persistence|expected|repeat)$ ]]; then
         epochs=0
       fi
@@ -39,7 +39,7 @@ for dataset in "${DATASETS[@]}"; do
         +task.lags="$L" \
         +task.horizon="$H" \
         +data.splits.date_splits=[0.6,0.2,0.2] \
-        +data.sampling.train_idx_mode=random \
+        +data.sampling.train_idx_mode=individuals \
         +data.sampling.eval_idx_mode=all \
         +data.sampling.eval_stride="$EVAL_STRIDE" \
         +training.batch_size=256 \

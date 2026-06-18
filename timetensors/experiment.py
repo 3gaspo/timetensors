@@ -6,7 +6,6 @@ import logging
 from time import perf_counter
 from typing import Any, Mapping
 
-from .dataset import get_sizes
 from .eval_model import eval_stage
 from .load_dataset import build_dataset_stage
 from .runtime import device, pretrained_path, rebuild_dataset, recompute_stats, run_dir, section, setup_logging, to_plain_config
@@ -15,18 +14,6 @@ from .visu.experiment_plots import save_criterion_loss_plot
 
 
 LOGGER = logging.getLogger(__name__)
-
-
-def _log_loader_sizes(loaders: Mapping[str, Any] | None) -> None:
-    if not loaders:
-        return
-    try:
-        shape, split_info, batch_info = get_sizes(loaders, str_info=True)
-        LOGGER.info("data_shape=%s", shape)
-        LOGGER.info("%s", split_info)
-        LOGGER.info("%s", batch_info)
-    except Exception as exc:
-        LOGGER.debug("could not log loader sizes: %s", exc)
 
 
 def _log_device_once(
@@ -93,14 +80,9 @@ def run_experiment(config: Mapping[str, Any]) -> dict[str, Any]:
         stats = train_result["stats"]
         results["state_path"] = str(train_result["state_path"])
         results["train_history_path"] = str(out_dir / "train_history.pt")
-        logged_device = _log_device_once(
-            train_result.get("learner"),
-            requested=device(config),
-            logged=logged_device,
-        )
+        logged_device = True
         history = train_result["history"]
         if history.get("train"):
-            _log_loader_sizes(loaders)
             criterion_name = train_result["learner"].criterion.name
             plot_path = save_criterion_loss_plot(
                 history,

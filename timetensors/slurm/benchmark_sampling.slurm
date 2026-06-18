@@ -43,7 +43,7 @@ for dataset in "${DATASETS[@]}"; do
         +data.sampling.eval_stride="$H" \
         +training.batch_size=256 \
         +training.device=gpu \
-        +training.epochs=50 \
+        +training.epochs=200 \
         +training.loss=nmse \
         +model.name=patchtst \
         +model.path=patchtst \

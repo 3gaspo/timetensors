@@ -21,12 +21,12 @@ def main() -> None:
 
     learner = LearnerConfig.from_dict({})
     assert learner.lr == 1e-5
-    assert learner.epochs == 1
+    assert learner.epochs == 200
 
     assert batch_size({}) == 256
 
     sampling = default_sampling({})
-    assert sampling["train_idx_mode"] == "random"
+    assert sampling["train_idx_mode"] == "individuals"
     assert sampling["eval_idx_mode"] == "all"
     assert sampling["train_stride"] == 1
     assert sampling["eval_stride"] == 1

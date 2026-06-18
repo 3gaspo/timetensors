@@ -29,7 +29,7 @@ python -m timetensors.experiment \
   +model.path=dlinear \
   +normalization.name=instance \
   +training.batch_size=256 \
-  +training.epochs=50 \
+  +training.epochs=200 \
   +output.dir=outputs/timetensor_models/electricity/168_24 \
   +output.name=dlinear
 ```
@@ -88,7 +88,7 @@ Controls how dataset items are sampled from split tensors.
 
 | Key | Default | Description |
 | --- | --- | --- |
-| `train_idx_mode` | `random` | Train sampler mode. |
+| `train_idx_mode` | `individuals` | Train sampler mode. |
 | `eval_idx_mode` | `all` | Eval sampler mode. |
 | `train_stride` | `1` | Step between train candidate start dates. |
 | `eval_stride` | `1` | Step between eval candidate start dates. |
@@ -136,7 +136,7 @@ Valid subset modes are `dates`, `individuals`, and `all`.
 | Key | Default | Description |
 | --- | --- | --- |
 | `training.batch_size` | `256` | Batch size. If it exceeds a split dataset length, PyTorch returns one smaller batch. |
-| `training.epochs` | `1` | Training epochs; `0` skips optimization but still saves/evaluates. |
+| `training.epochs` | `200` | Training epochs; `0` skips optimization but still saves/evaluates. |
 | `training.loss` | `nmse` | Training loss config. |
 | `training.complete_evaluation` | `true` | Include extra eval metrics beyond `mse` and `nmse`. |
 | `training.lr` | `1e-5` | Learning rate. |
@@ -392,8 +392,8 @@ potential windows, accessible windows, and windows removed by `remove_cte`.
 `stats.json` is per final loader. A loader means the final combination of
 cluster, split, subset, and sampling spec. Stats therefore change when `lags`,
 `horizon`, subset, stride, split, cluster, or constant-window filtering changes.
-They do not depend on random draw order. For example, a train loader with
-`train_idx_mode=random` and runtime length `1` still computes stats over all
+They do not depend on draw order. For example, a train loader with
+`train_idx_mode=individuals` and runtime length `1` still computes stats over all
 accessible `(individual, date)` windows unless `experiment.stats_max_windows`
 limits the scan.
 
@@ -418,7 +418,7 @@ clusters. They use these shell variables:
 | `SEED` | `1` where used | Experiment seed. |
 | `SOTA_BATCH_SIZE` | `350` in SOTA scripts | Evaluation batch size for Chronos/TabPFN. |
 | `PATCHTST_BATCH_SIZE` | `256` | PatchTST batch size in `benchmark_sota_compare.slurm`. |
-| `PATCHTST_EPOCHS` | `100` | PatchTST training epochs in `benchmark_sota_compare.slurm`. |
+| `PATCHTST_EPOCHS` | `200` | PatchTST training epochs in `benchmark_sota_compare.slurm`. |
 | `CHRONOS_WEIGHTS_PATH` | unset | Optional Chronos local weights directory. |
 | `CHRONOS_DEVICE_MAP` | `cuda` | Chronos loading device map. |
 | `TABPFN_WEIGHTS_PATH` | unset | Optional TabPFN checkpoint path. |

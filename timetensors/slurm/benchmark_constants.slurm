@@ -47,7 +47,7 @@ for dataset in "${DATASETS[@]}"; do
         +data.sampling.remove_eval_cte="$rm_eval" \
         +training.batch_size=256 \
         +training.device=gpu \
-        +training.epochs=50 \
+        +training.epochs=200 \
         +model.name=linear \
         +model.path=linear \
         +model.repeat_constant="$repeat" \

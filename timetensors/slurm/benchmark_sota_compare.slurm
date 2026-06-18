@@ -22,7 +22,7 @@ SETTINGS=("1344 336" "672 168" "168 24" "24 24")
 MODELS=("patchtst" "chronos" "tabpfn")
 EVAL_STRIDE="${EVAL_STRIDE:-512}"
 PATCHTST_BATCH_SIZE="${PATCHTST_BATCH_SIZE:-256}"
-PATCHTST_EPOCHS="${PATCHTST_EPOCHS:-100}"
+PATCHTST_EPOCHS="${PATCHTST_EPOCHS:-200}"
 SOTA_BATCH_SIZE="${SOTA_BATCH_SIZE:-350}"
 
 for dataset in "${DATASETS[@]}"; do
@@ -53,7 +53,7 @@ for dataset in "${DATASETS[@]}"; do
         +task.lags="$L" \
         +task.horizon="$H" \
         +data.splits.date_splits=[0.6,0.2,0.2] \
-        +data.sampling.train_idx_mode=random \
+        +data.sampling.train_idx_mode=individuals \
         +data.sampling.eval_idx_mode=all \
         +data.sampling.train_stride="$EVAL_STRIDE" \
         +data.sampling.eval_stride="$EVAL_STRIDE" \

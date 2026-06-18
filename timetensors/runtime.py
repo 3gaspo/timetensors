@@ -140,7 +140,7 @@ def default_splits(config: Mapping[str, Any]) -> dict[str, Any]:
 def default_sampling(config: Mapping[str, Any]) -> dict[str, Any]:
     data = section(config, "data")
     sampling = dict(data.get("sampling") or section(config, "sampling"))
-    sampling.setdefault("train_idx_mode", "random")
+    sampling.setdefault("train_idx_mode", "individuals")
     sampling.setdefault("eval_idx_mode", "all")
     sampling.setdefault("train_stride", 1)
     sampling.setdefault("eval_stride", 1)
