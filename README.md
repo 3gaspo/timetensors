@@ -5,8 +5,8 @@ models, tensorized datasets, and Slurm benchmark scripts.
 
 ## Entrypoints
 
-Run from the repository root so relative paths in the Slurm scripts resolve
-against this folder.
+Run commands from the repository root so relative paths resolve against this
+folder.
 
 ```bash
 python -m timetensors.experiment  # dataset build, train, and eval orchestration
@@ -39,6 +39,8 @@ python -m timetensors.experiment \
 Hydra is used with no config file by default, so most runs pass values as
 `+section.key=value` overrides. Nested dictionaries can be passed with dot
 paths, for example `+data.sampling.eval_stride=24`.
+
+The sections below document the canonical package specs.
 
 ### `data`
 
@@ -403,7 +405,8 @@ accessible windows is used; otherwise the scan is deterministic and exhaustive.
 
 ## Slurm Scripts
 
-Scripts live in `timetensors/slurm/` and use these shell variables:
+Scripts live in `timetensors/slurm/` and define experiment launchers for Slurm
+clusters. They use these shell variables:
 
 | Variable | Default | Description |
 | --- | --- | --- |
@@ -424,7 +427,7 @@ Scripts live in `timetensors/slurm/` and use these shell variables:
 `benchmark_chronos_covariates.slurm` defines explicit augmentation specs in
 its `AUGMENTS` array, including mixed `past_only` and `future_included` runs.
 
-Submit from the repository root:
+Submit from the repository root in a Slurm environment:
 
 ```bash
 sbatch timetensors/slurm/benchmark_models.slurm
@@ -432,6 +435,20 @@ REBUILD_DATASETS=false sbatch timetensors/slurm/benchmark_models.slurm
 sbatch timetensors/slurm/benchmark_sota_compare.slurm
 sbatch timetensors/slurm/benchmark_chronos_covariates.slurm
 ```
+
+## Smoke Tests
+
+Lightweight component tests live in `tests/`. They exercise config defaults,
+synthetic dataloaders, and model construction.
+
+```bash
+python tests/test_config_defaults.py
+python tests/test_dataloaders.py
+python tests/test_models.py
+```
+
+These scripts build tiny synthetic tensors in temporary folders and avoid Slurm,
+large datasets, and long training runs.
 
 ## Device Logging
 
