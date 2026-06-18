@@ -182,7 +182,7 @@ def eval_stage(
     per_user_path = save_torch(per_user, out_dir / "per_user_all_losses.pt")
     example_path = None
     if bool(evaluation.get("plot_example", False)) and selected:
-        example_path = Path(evaluation.get("example_plot_path", out_dir / "example_prediction.png"))
+        example_path = Path(evaluation.get("example_plot_path", out_dir / "example_prediction.pdf"))
         plot_example_prediction(learner, loaders[selected[0]], save_path=example_path)
         LOGGER.info("saved example_prediction=%s", example_path.name)
     return {

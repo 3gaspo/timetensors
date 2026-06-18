@@ -167,6 +167,58 @@ def plot_heatmap(matrix, title: str = "Heatmap", x_name: str = "x", y_name: str 
     return fig
 
 
+def linear_weight_matrix(model) -> torch.Tensor:
+    """Extract linear-style weights as ``(out_dim, horizon, in_dim, lags)``."""
+    base_model = getattr(model, "base_model", model)
+    if hasattr(base_model, "weight_matrix"):
+        matrix = base_model.weight_matrix()
+    elif hasattr(model, "weight_matrix"):
+        matrix = model.weight_matrix()
+    elif hasattr(base_model, "linear") and hasattr(base_model.linear, "weight"):
+        weight = base_model.linear.weight.detach()
+        dim = int(getattr(base_model, "dim"))
+        horizon = int(getattr(base_model, "horizon"))
+        lags = int(getattr(base_model, "lags"))
+        matrix = weight.reshape(dim, horizon, dim, lags)
+    else:
+        raise ValueError(f"{base_model.__class__.__name__} does not expose linear weights")
+    return matrix.detach().cpu()
+
+
+def plot_linear_weight_matrix(
+    matrix: torch.Tensor,
+    title: str = "Linear weights",
+):
+    """Plot linear weights flattened as output horizon rows by input lag columns."""
+    values = matrix.detach().cpu()
+    flat = values.reshape(values.shape[0] * values.shape[1], values.shape[2] * values.shape[3])
+    return plot_heatmap(
+        flat.numpy(),
+        title=title,
+        x_name="input dim x lag",
+        y_name="output dim x horizon",
+    )
+
+
+def save_linear_weight_plots(
+    model,
+    out_dir: str | Path,
+    *,
+    prefix: str = "linear_weights",
+    title: str = "Linear weights",
+) -> dict[str, Path]:
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    matrix = linear_weight_matrix(model)
+    tensor_path = out_dir / f"{prefix}.pt"
+    torch.save(matrix, tensor_path)
+    fig = plot_linear_weight_matrix(matrix, title=title)
+    image_path = out_dir / f"{prefix}.pdf"
+    fig.savefig(image_path)
+    plt.close(fig)
+    return {"tensor": tensor_path, "image": image_path}
+
+
 def results_table(run_dir: str | Path) -> dict[str, Any]:
     run_dir = Path(run_dir)
     json_files = sorted(run_dir.glob("*results.json")) + sorted(run_dir.glob("*summary.json"))

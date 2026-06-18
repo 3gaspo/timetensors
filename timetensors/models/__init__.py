@@ -30,6 +30,7 @@ from .normalizations import (
     normalize_standard,
 )
 from .pipeline import Batch, LearnerConfig, TorchLearner, cuda_available, cuda_diagnostics, load_learner, train_model
+from .sklinear import SkLinearForecaster, iter_loader_xy
 from .sota import Chronos, DLinear, PatchTST, TabPFN
 
 __all__ = [
@@ -57,6 +58,7 @@ __all__ = [
     "RepeatConstantOutput",
     "RevINNormalization",
     "SigmoidNormalization",
+    "SkLinearForecaster",
     "StandardNormalization",
     "TanhNormalization",
     "TabPFN",
@@ -73,6 +75,7 @@ __all__ = [
     "get_minmax_stats",
     "get_normal_stats",
     "get_rms_stats",
+    "iter_loader_xy",
     "load_learner",
     "load_model",
     "normalize_covariates",

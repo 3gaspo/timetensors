@@ -11,6 +11,7 @@ from .load_dataset import build_dataset_stage
 from .models import TorchLearner, get_losses, load_model
 from .runtime import (
     batch_size,
+    config_bool,
     dataset_path,
     default_sampling,
     default_splits,
@@ -31,6 +32,7 @@ from .runtime import (
     task_shape,
     to_plain_config,
 )
+from .visu.experiment_plots import save_linear_weight_plots
 
 
 LOGGER = logging.getLogger(__name__)
@@ -138,12 +140,24 @@ def train_stage(
     state_path = learner.model.save_state_dict(out_dir / "model_state.pt")
     save_torch(history, out_dir / "train_history.pt")
     save_torch({"stats": stats, "shape": shape}, out_dir / "train_metadata.pt")
+    weight_plot_paths = None
+    if config_bool(section(config, "experiment").get("plot_weights", False)):
+        try:
+            weight_plot_paths = save_linear_weight_plots(
+                learner.model,
+                out_dir,
+                title=f"{section(config, 'model').get('name', 'model')} weights",
+            )
+            LOGGER.info("saved linear_weights=%s", weight_plot_paths["image"].name)
+        except ValueError as exc:
+            LOGGER.debug("could not plot model weights: %s", exc)
     LOGGER.debug("saved training artifacts in %s", out_dir)
     return {
         "model": learner.model,
         "learner": learner,
         "history": history,
         "state_path": Path(state_path),
+        "weight_plot_paths": weight_plot_paths,
         "loaders": loaders,
         "stats": stats,
         "shape": shape,

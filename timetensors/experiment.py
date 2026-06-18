@@ -80,6 +80,9 @@ def run_experiment(config: Mapping[str, Any]) -> dict[str, Any]:
         stats = train_result["stats"]
         results["state_path"] = str(train_result["state_path"])
         results["train_history_path"] = str(out_dir / "train_history.pt")
+        if train_result.get("weight_plot_paths"):
+            results["linear_weight_plot_path"] = str(train_result["weight_plot_paths"]["image"])
+            results["linear_weight_tensor_path"] = str(train_result["weight_plot_paths"]["tensor"])
         logged_device = True
         history = train_result["history"]
         if history.get("train"):
@@ -87,7 +90,7 @@ def run_experiment(config: Mapping[str, Any]) -> dict[str, Any]:
             plot_path = save_criterion_loss_plot(
                 history,
                 criterion_name,
-                out_dir / "criterion_loss.png",
+                out_dir / "criterion_loss.pdf",
             )
             results["criterion_loss_plot_path"] = str(plot_path)
             LOGGER.info("saved criterion_loss=%s", plot_path.name)

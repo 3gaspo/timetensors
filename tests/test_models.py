@@ -12,6 +12,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from timetensors.models.models import ModelConfig, load_model
+from timetensors.models.baselines import PeriodicLinearBaseline
 
 
 def _config(name: str, **kwargs) -> ModelConfig:
@@ -34,6 +35,7 @@ def _assert_forward(name: str, **kwargs) -> None:
 
 def main() -> None:
     _assert_forward("linear")
+    _assert_forward("periodic_linear", period=4)
     _assert_forward("dlinear", kernel_size=3)
     _assert_forward(
         "patchtst",
@@ -66,6 +68,10 @@ def main() -> None:
         )
     )
     assert tuple(covariate_model(torch.randn(2, 2, 8)).shape) == (2, 2, 3)
+
+    periodic = PeriodicLinearBaseline(lags=336, dim=1, horizon=24, period=168)
+    assert periodic.indices_by_horizon[0] == [0, 168]
+    assert periodic.indices_by_horizon[23] == [23, 191]
 
     try:
         load_model(_config("DLinear"))

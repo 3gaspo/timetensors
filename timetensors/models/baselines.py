@@ -109,15 +109,22 @@ class LinearBaseline(nn.Module):
         y = self.linear(x.reshape(x.shape[0], self.dim * self.lags))
         return y.reshape(x.shape[0], self.dim, self.horizon)
 
+    def weight_matrix(self) -> torch.Tensor:
+        """Return weights as ``(output_dim, horizon, input_dim, lag)``."""
+        return self.linear.weight.detach().reshape(
+            self.dim,
+            self.horizon,
+            self.dim,
+            self.lags,
+        )
+
 
 class PeriodicLinearBaseline(nn.Module):
-    """Linear map from explicit periodic history positions.
+    """Horizon-specific linear maps from matching periodic history positions.
 
-    For each forecast step, this model selects the same phase from previous
-    periods. With ``period=24`` and ``horizon=6``, it learns from the values
-    at the previous days' next six forecast phases. ``forecast_offset`` shifts
-    the first forecast phase, and ``cycles`` limits the number of previous
-    periods used. ``cycles=None`` uses every available matching position.
+    Forecast step ``h`` sees only lookback positions with the same phase as
+    absolute future time ``lags + forecast_offset + h`` modulo ``period``.
+    ``cycles`` limits the number of previous matching positions per horizon.
     """
 
     def __init__(
@@ -142,26 +149,36 @@ class PeriodicLinearBaseline(nn.Module):
             raise ValueError("horizon must be positive")
         if self.cycles is not None and self.cycles < 1:
             raise ValueError("cycles must be positive or None")
-        indices = self._build_indices()
-        if not indices:
-            raise ValueError("period selection produced no lookback positions")
-        self.register_buffer("indices", torch.as_tensor(indices, dtype=torch.long))
-        self.linear = nn.Linear(len(indices) * self.dim, self.horizon * self.dim)
+        indices_by_horizon = self._build_indices()
+        if any(not indices for indices in indices_by_horizon):
+            raise ValueError("period selection produced an empty horizon input")
+        self._indices_by_horizon = [tuple(indices) for indices in indices_by_horizon]
+        for horizon_index, indices in enumerate(indices_by_horizon):
+            self.register_buffer(
+                f"indices_{horizon_index}",
+                torch.as_tensor(indices, dtype=torch.long),
+            )
+        self.linears = nn.ModuleList(
+            [nn.Linear(len(indices) * self.dim, self.dim) for indices in indices_by_horizon]
+        )
 
-    def _build_indices(self) -> list[int]:
-        # Phase of the first forecast step just after the lookback window.
-        first_future_phase = (self.lags + self.forecast_offset) % self.period
-        phases = {
-            (first_future_phase + step) % self.period
-            for step in range(self.horizon)
-        }
-        candidates = [
-            index for index in range(self.lags) if index % self.period in phases
-        ]
-        if self.cycles is None:
-            return candidates
-        max_points = self.cycles * min(self.horizon, self.period)
-        return candidates[-max_points:]
+    @property
+    def indices_by_horizon(self) -> list[list[int]]:
+        return [list(indices) for indices in self._indices_by_horizon]
+
+    def _build_indices(self) -> list[list[int]]:
+        indices_by_horizon = []
+        for horizon_index in range(self.horizon):
+            future_phase = (
+                self.lags + self.forecast_offset + horizon_index
+            ) % self.period
+            indices = [
+                index for index in range(self.lags) if index % self.period == future_phase
+            ]
+            if self.cycles is not None:
+                indices = indices[-self.cycles :]
+            indices_by_horizon.append(indices)
+        return indices_by_horizon
 
     def forward(
         self,
@@ -170,6 +187,25 @@ class PeriodicLinearBaseline(nn.Module):
         **kwargs,
     ) -> torch.Tensor:
         del covariates, kwargs
-        selected = x.index_select(dim=-1, index=self.indices.to(x.device))
-        y = self.linear(selected.reshape(x.shape[0], -1))
-        return y.reshape(x.shape[0], self.dim, self.horizon)
+        outputs = []
+        for horizon_index, linear in enumerate(self.linears):
+            indices = getattr(self, f"indices_{horizon_index}").to(x.device)
+            selected = x.index_select(dim=-1, index=indices)
+            outputs.append(linear(selected.reshape(x.shape[0], -1)).unsqueeze(-1))
+        return torch.cat(outputs, dim=-1)
+
+    def weight_matrix(self) -> torch.Tensor:
+        """Return sparse weights as ``(output_dim, horizon, input_dim, lag)``."""
+        weights = torch.zeros(
+            self.dim,
+            self.horizon,
+            self.dim,
+            self.lags,
+            dtype=self.linears[0].weight.dtype,
+            device=self.linears[0].weight.device,
+        )
+        for horizon_index, linear in enumerate(self.linears):
+            indices = getattr(self, f"indices_{horizon_index}")
+            head = linear.weight.detach().reshape(self.dim, self.dim, len(indices))
+            weights[:, horizon_index, :, indices] = head
+        return weights.detach()

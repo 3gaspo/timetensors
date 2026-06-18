@@ -12,6 +12,7 @@ folder.
 python -m timetensors.experiment  # dataset build, train, and eval orchestration
 python -m timetensors.load_dataset # build/load tensor dataset artifacts only
 python -m timetensors.train_model  # train only
+python -m timetensors.train_sklearn # fit/evaluate scikit-learn models
 python -m timetensors.eval_model   # evaluate only
 ```
 
@@ -180,6 +181,34 @@ Built-in model keys:
 Inline model kwargs automatically receive `lags`, `dim`, and `horizon` where
 needed.
 
+`periodic_linear` uses one linear head per forecast step. Zero-based horizon
+step `h` sees only lookback indexes with phase
+`(lags + forecast_offset + h) % period`; `cycles` optionally keeps only the
+last N matching indexes for each horizon step. With `lags=336`, `horizon=24`,
+and `period=168`, step 1 uses lookback indexes `[0,168]`, step 24 uses
+`[23,191]`.
+
+`sklinear` is trained with `python -m timetensors.train_sklearn` rather than
+the PyTorch optimizer path. It fits a multi-output `sklearn.linear_model.LinearRegression`
+from an unrolled loader and applies the same configured model normalization to
+inputs and targets before inverting predictions back to the original scale.
+
+### `sklearn`
+
+Options used by `python -m timetensors.train_sklearn`.
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `sklearn.unroll_mode` | `accessible` | `accessible` deterministically scans all sampler-accessible windows; `loader` consumes the dataloader draw order. |
+| `sklearn.eval_unroll_mode` | `sklearn.unroll_mode` | Unroll mode for evaluation splits. |
+| `sklearn.max_windows` | unset | Optional cap on fitted train windows. |
+| `sklearn.eval_max_windows` | unset | Optional cap on evaluated windows per split. |
+| `sklearn.model_kwargs` | `{}` | Extra kwargs forwarded to `LinearRegression`. |
+
+Set `+experiment.plot_weights=true` to save `linear_weights.pt` and
+`linear_weights.pdf` for PyTorch linear models. The sklearn trainer saves these
+artifacts by default.
+
 Chronos and TabPFN are optional SOTA wrappers. They use the normal
 `TimeTensorModel` path, including normalization, structured covariates, and
 constant-output handling. Install the optional dependencies before using them:
@@ -300,7 +329,7 @@ Grevin stats initialization uses loader statistics from the selected split:
 | `evaluation.splits` | all loader splits | Split name or list of split names to evaluate. |
 | `evaluation.runs` | `1` | Repeated evaluation passes for final evaluation. |
 | `evaluation.plot_example` | `false` | Save an example prediction plot. |
-| `evaluation.example_plot_path` | `<run_dir>/example_prediction.png` | Optional path for the example prediction plot. |
+| `evaluation.example_plot_path` | `<run_dir>/example_prediction.pdf` | Optional path for the example prediction plot. |
 
 ### `output`
 
@@ -316,8 +345,8 @@ The run directory is:
 ```
 
 Saved artifacts include `model_state.pt`, `train_history.pt`,
-`train_metadata.pt`, `criterion_loss.png`, `all_losses.pt`,
-`per_user_all_losses.pt`, and optionally `example_prediction.png`.
+`train_metadata.pt`, `criterion_loss.pdf`, `all_losses.pt`,
+`per_user_all_losses.pt`, and optionally `example_prediction.pdf`.
 
 ### `misc`
 
@@ -423,6 +452,8 @@ clusters. They use these shell variables:
 | `CHRONOS_DEVICE_MAP` | `cuda` | Chronos loading device map. |
 | `TABPFN_WEIGHTS_PATH` | unset | Optional TabPFN checkpoint path. |
 | `TABPFN_DEVICE` | `cuda` | TabPFN regressor device. |
+| `TRAIN_STRIDE` | `24` in `benchmark_linear_models.slurm` | Train stride for linear-model comparison. |
+| `EVAL_STRIDE` | `24` in `benchmark_linear_models.slurm` | Eval stride for linear-model comparison. |
 
 `benchmark_chronos_covariates.slurm` defines explicit augmentation specs in
 its `AUGMENTS` array, including mixed `past_only` and `future_included` runs.
@@ -434,6 +465,7 @@ sbatch timetensors/slurm/benchmark_models.slurm
 REBUILD_DATASETS=false sbatch timetensors/slurm/benchmark_models.slurm
 sbatch timetensors/slurm/benchmark_sota_compare.slurm
 sbatch timetensors/slurm/benchmark_chronos_covariates.slurm
+sbatch timetensors/slurm/benchmark_linear_models.slurm
 ```
 
 ## Smoke Tests
@@ -445,6 +477,7 @@ synthetic dataloaders, and model construction.
 python tests/test_config_defaults.py
 python tests/test_dataloaders.py
 python tests/test_models.py
+python tests/test_sklearn.py
 ```
 
 These scripts build tiny synthetic tensors in temporary folders and avoid Slurm,
