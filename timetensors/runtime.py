@@ -69,7 +69,19 @@ def rebuild_dataset(config: Mapping[str, Any]) -> bool:
 def recompute_stats(config: Mapping[str, Any]) -> bool:
     """Return whether L/H-dependent dataset statistics should be computed."""
     experiment = section(config, "experiment")
-    return config_bool(experiment.get("recompute_stats", True))
+    return config_bool(experiment.get("recompute_stats", True)) or normalization_needs_stats(config)
+
+
+def normalization_needs_stats(config: Mapping[str, Any]) -> bool:
+    """Return whether model construction needs loader statistics."""
+    normalization = section(config, "normalization")
+    name = str(normalization.get("name", "identity")).lower().replace("+", "_")
+    if name not in {"grevin", "grevin_normalization", "generalized_revin", "cmin", "previn", "personalized_revin"}:
+        return False
+    kwargs = dict(normalization.get("kwargs") or {})
+    if kwargs.get("stats") is not None:
+        return False
+    return config_bool(kwargs.get("init_from_stats", False))
 
 
 def stats_max_windows(config: Mapping[str, Any]) -> int | None:
@@ -201,14 +213,13 @@ def model_specs(config: Mapping[str, Any], shape: tuple[int, int, int]) -> str |
             "name": normalization.get("name", "identity"),
             "kwargs": normalization.get("kwargs", {}) or {},
         }
-    augmentation = model.get("covariate_augmentation")
     return ModelConfig(
         name=name,
         path=path,
         kwargs=kwargs,
         normalization=normalization_config,
-        covariate_augmentation=augmentation,
-        repeat_constant=bool(model.get("repeat_constant", False)),
+        covariate_augmentation=model.get("covariate_augmentation"),
+        repeat_constant=config_bool(model.get("repeat_constant", False)),
         state_dict_path=model.get("state_dict_path"),
     )
 

@@ -523,12 +523,23 @@ class TorchLearner:
         )
 
     def _predict(self, batch: Batch) -> torch.Tensor:
+        normalization = getattr(self.model, "normalization", None)
+        metadata = batch.metadata or {}
+        cluster_ids = metadata.get("cluster_ids")
+        model_kwargs = {}
+        model_setter = getattr(self.model, "_set_normalization_cluster_ids", None)
+        set_cluster_ids = getattr(normalization, "set_cluster_ids", None)
+        if callable(model_setter):
+            model_kwargs["cluster_ids"] = cluster_ids
+        elif callable(set_cluster_ids):
+            set_cluster_ids(metadata.get("cluster_ids"))
         return self.model(
             batch.x,
             covariates=batch.covariates,
             past_covariates=batch.past_covariates,
             future_covariates=batch.future_covariates,
             static_covariates=batch.static_covariates,
+            **model_kwargs,
         )
 
     @staticmethod

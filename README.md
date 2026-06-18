@@ -171,23 +171,56 @@ and `mae`/`l1`; scalings are `normal`/`instance`/`std` and
 Built-in model keys:
 
 `persistence`, `expected`, `repeat`, `lookback`, `linear`,
-`periodic_linear`, `period`, `dlinear`, `DLinear`, `patchtst`, `PatchTST`.
+`periodic_linear`, `period`, `dlinear`, `DLinear`, `patchtst`, `PatchTST`,
+`chronos`, `Chronos`, `tabpfn`, `TabPFN`.
 
 Inline model kwargs automatically receive `lags`, `dim`, and `horizon` where
 needed.
+
+Chronos and TabPFN are optional SOTA wrappers. They use the normal
+`TimeTensorModel` path, including normalization, structured covariates, and
+constant-output handling. Install the optional dependencies before using them:
+
+```bash
+pip install -e ".[sota]"
+```
+
+Useful SOTA kwargs:
+
+| Model | Kwarg | Meaning |
+| --- | --- | --- |
+| `chronos` | `weights_path` | Local Chronos-2 weights directory. If unset, the wrapper first checks the new package path, then the legacy `timetensors_old` path. |
+| `chronos` | `cross_learning` | Forwarded to `pipeline.predict(...)`. |
+| `chronos` | `shared_context` | Treat context batches as shared across forecast samples. |
+| `chronos` | `device_map` | Chronos loading device map, usually `cuda` or `cpu`. |
+| `tabpfn` | `weights_path` | Local TabPFN checkpoint path. If unset, the wrapper first checks the new package path, then the legacy `timetensors_old` path. |
+| `tabpfn` | `cross_learning` | Fit one tabular regressor over the whole batch instead of one fit per sample. |
+| `tabpfn` | `dimension_encoding` | `ordinal` or `one-hot` series identity features. |
+| `tabpfn` | `context_as_features` | Use future-known covariates as tabular features instead of extra training rows. |
+| `tabpfn` | `use_time_features` | Add normalized time index and seasonal sine/cosine features. |
 
 ### `model.covariate_augmentation`
 
 | Key | Default | Description |
 | --- | --- | --- |
-| `mode` / `modes` | none | Augmentation modes. A dash-separated string is accepted. |
+| `mode` / `modes` | none | Augmentation modes. A dash-separated string is accepted for simple transforms, or use a list of structured specs. |
+| `kwargs.target` | `past_only` | `past_only` appends generated covariates only over the lookback. `future` creates generated covariates over lookback plus horizon and splits them into past/future entries. |
 | `kwargs.noise_scale` | `1.0` | Scale for `noise` mode. |
 | `kwargs.constant_value` | `1.0` | Value for `constant` mode. |
 | `kwargs.kernel_size` | `5` | Odd smoothing kernel size for `kernel` mode. |
 | `kwargs.eps` | `1e-8` | Numerical epsilon. |
 
 Modes: `identity`, `square`, `root`, `sign`, `mirror`, `kernel`, `noise`,
-`constant`.
+`constant`. For repeated noise or constant covariates with explicit values, use
+structured specs:
+
+```bash
++model.covariate_augmentation.modes='[{name:noise,count:3,value:1.0,target:past_only}]'
++model.covariate_augmentation.modes='[{name:constant,count:2,value:0.0,target:future}]'
+```
+
+Each spec accepts `name` or `mode`, `count`, `value`, and optional `target`.
+`target` defaults to `model.covariate_augmentation.kwargs.target`.
 
 ### `normalization`
 
@@ -205,6 +238,9 @@ Canonical normalization names. Only these names are accepted:
 | `in-min-max` | Per-instance min-max scaling. | `eps`, `detach_stats` |
 | `instance` | RevIN with `affine=false`. Kept as a convenient name because it is a common baseline. | `eps`, `center`, `detach_stats`, `transform` |
 | `revin` | Reversible instance normalization. Variants such as last-value centering, arcsinh transform, and affine/no-affine are kwargs, not separate names. | `affine`, `center`, `transform`, `eps`, `detach_stats`, `dim` |
+| `grevin` | Generalized RevIN with learnable partial centering/scaling and output restoration. | `eps`, `center`, `start_in`, `tie_revin`, `personalize`, `n_clusters`, `init_from_stats`, `stats_split` |
+| `cmin` | Grevin preset with instance normalization frozen and output `alpha,beta` trainable. | `n_clusters`, `init_from_stats`, `stats_split` |
+| `previn` | Personalized RevIN preset with per-cluster affine parameters. | `n_clusters`, `unknown_cluster_id` |
 | `sigmoid` | Sigmoid transform with logit inverse. | `eps` |
 | `tanh` | Tanh transform with inverse hyperbolic tangent. | `eps` |
 | `relative_mean` | Scale by absolute instance mean. | `eps`, `detach_stats` |
@@ -226,6 +262,14 @@ RevIN examples:
 `arcsinh` means inverse hyperbolic sine. The code uses `torch.asinh`
 internally because that is PyTorch's function name, but the config spelling is
 `arcsinh`.
+
+Grevin stats initialization uses loader statistics from the selected split:
+
+```bash
++normalization.name=cmin
++normalization.kwargs.n_clusters=4
++normalization.kwargs.init_from_stats=true
+```
 
 ### `experiment`
 
@@ -365,12 +409,22 @@ Scripts live in `timetensors/slurm/` and use these shell variables:
 | `RECOMPUTE_STATS` | `true` | Recompute L/H-dependent stats for each run. |
 | `STATS_MAX_WINDOWS` | unset | Optional cap forwarded to `experiment.stats_max_windows`. |
 | `SEED` | `1` where used | Experiment seed. |
+| `SOTA_BATCH_SIZE` | `350` in SOTA scripts | Evaluation batch size for Chronos/TabPFN. |
+| `PATCHTST_BATCH_SIZE` | `128` | PatchTST batch size in `benchmark_sota_compare.slurm`. |
+| `PATCHTST_EPOCHS` | `100` | PatchTST training epochs in `benchmark_sota_compare.slurm`. |
+| `CHRONOS_WEIGHTS_PATH` | unset | Optional Chronos local weights directory. |
+| `CHRONOS_DEVICE_MAP` | `cuda` | Chronos loading device map. |
+| `TABPFN_WEIGHTS_PATH` | unset | Optional TabPFN checkpoint path. |
+| `TABPFN_DEVICE` | `cuda` | TabPFN regressor device. |
+| `AUGMENT_TARGET` | `past_only` | Generated covariate target for `benchmark_chronos_covariates.slurm`; use `future` to include horizon-known covariates. |
 
 Submit from the repository root:
 
 ```bash
 sbatch timetensors/slurm/benchmark_models.slurm
 REBUILD_DATASETS=false sbatch timetensors/slurm/benchmark_models.slurm
+sbatch timetensors/slurm/benchmark_sota_compare.slurm
+sbatch timetensors/slurm/benchmark_chronos_covariates.slurm
 ```
 
 ## Device Logging

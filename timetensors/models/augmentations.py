@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -16,6 +18,46 @@ def as_list(value) -> list:
     if isinstance(value, tuple):
         return list(value)
     return [value]
+
+
+def _expand_mode_specs(raw_modes: list) -> list:
+    specs: list = []
+    for item in raw_modes:
+        if isinstance(item, str):
+            text = item.strip()
+            if text.lower() in {"", "none", "false"}:
+                continue
+            if text.lower() == "all":
+                specs.extend(["kernel", "square", "root", "sign", "mirror"])
+            else:
+                specs.extend(part for part in text.split("-") if part)
+        else:
+            specs.append(item)
+    return specs
+
+
+def _parse_mode_spec(spec) -> dict[str, object]:
+    if isinstance(spec, Mapping):
+        mode = spec.get("name", spec.get("mode", spec.get("type")))
+        if mode is None:
+            raise ValueError("covariate augmentation spec requires 'name' or 'mode'")
+        mode = str(mode)
+        value = spec.get("value")
+        if value is None and mode == "noise":
+            value = spec.get("noise_scale", spec.get("scale"))
+        if value is None and mode == "constant":
+            value = spec.get("constant_value")
+        count = int(spec.get("count", 1))
+        if count < 1:
+            raise ValueError("covariate augmentation count must be positive")
+        target = spec.get("target")
+        return {
+            "mode": mode,
+            "count": count,
+            "value": None if value is None else float(value),
+            "target": None if target is None else str(target),
+        }
+    return {"mode": str(spec), "count": 1, "value": None, "target": None}
 
 
 def _cat_optional(parts: list[torch.Tensor]) -> torch.Tensor | None:
@@ -174,16 +216,14 @@ class CovariateAugmentation(nn.Module):
         constant_value: float = 1.0,
         kernel_size: int = 5,
         eps: float = 1e-8,
+        target: str = "past_only",
     ):
         super().__init__()
-        raw_modes = as_list(modes)
-        if len(raw_modes) == 1 and isinstance(raw_modes[0], str):
-            text = raw_modes[0]
-            raw_modes = [] if text.lower() in {"", "none", "false"} else text.split("-")
-        self.modes = [str(mode) for mode in raw_modes]
+        self.modes = [_parse_mode_spec(spec) for spec in _expand_mode_specs(as_list(modes))]
         self.noise_scale = float(noise_scale)
         self.constant_value = float(constant_value)
         self.eps = float(eps)
+        self.target = str(target)
         kernel_size = int(kernel_size)
         if kernel_size < 1 or kernel_size % 2 == 0:
             raise ValueError("kernel_size must be a positive odd integer")
@@ -219,7 +259,14 @@ class CovariateAugmentation(nn.Module):
         pieces = []
         if structured["past"] is not None:
             pieces.append(structured["past"])
-        for mode in self.modes:
+        future_pieces = []
+        if structured["future"] is not None:
+            future_pieces.append(structured["future"])
+        for spec in self.modes:
+            mode = str(spec["mode"])
+            count = int(spec["count"])
+            value = spec["value"]
+            target = self.target if spec["target"] is None else str(spec["target"])
             if mode == "identity":
                 pieces.append(x)
             elif mode == "square":
@@ -233,13 +280,66 @@ class CovariateAugmentation(nn.Module):
             elif mode == "kernel":
                 pieces.append(self._kernel(x))
             elif mode == "noise":
-                pieces.append(self.noise_scale * torch.randn_like(x[:, :1, :]))
+                scale = self.noise_scale if value is None else float(value)
+                for _ in range(count):
+                    self._append_generated(
+                        pieces,
+                        future_pieces,
+                        scale * self._randn(x, horizon=int(horizon), target=target),
+                        lags=x.shape[-1],
+                    )
             elif mode == "constant":
-                pieces.append(torch.full_like(x[:, :1, :], self.constant_value))
+                constant = self.constant_value if value is None else float(value)
+                for _ in range(count):
+                    self._append_generated(
+                        pieces,
+                        future_pieces,
+                        self._full(x, constant, horizon=int(horizon), target=target),
+                        lags=x.shape[-1],
+                    )
             else:
                 raise ValueError(f"unknown covariate augmentation {mode!r}")
         structured["past"] = _cat_optional(pieces)
+        structured["future"] = _cat_optional(future_pieces)
         return structured
+
+    def _generated_length(self, x: torch.Tensor, horizon: int, target: str) -> int:
+        if target == "future":
+            return x.shape[-1] + horizon
+        if target in {"past_only", "past"}:
+            return x.shape[-1]
+        raise ValueError("target must be 'past_only', 'past', or 'future'")
+
+    def _randn(self, x: torch.Tensor, *, horizon: int, target: str) -> torch.Tensor:
+        return torch.randn(
+            x.shape[0],
+            1,
+            self._generated_length(x, horizon, target),
+            device=x.device,
+            dtype=x.dtype,
+        )
+
+    def _full(self, x: torch.Tensor, value: float, *, horizon: int, target: str) -> torch.Tensor:
+        return torch.full(
+            (x.shape[0], 1, self._generated_length(x, horizon, target)),
+            value,
+            device=x.device,
+            dtype=x.dtype,
+        )
+
+    def _append_generated(
+        self,
+        past_pieces: list[torch.Tensor],
+        future_pieces: list[torch.Tensor],
+        value: torch.Tensor,
+        *,
+        lags: int,
+    ) -> None:
+        if value.shape[-1] == lags:
+            past_pieces.append(value)
+            return
+        past_pieces.append(value[..., :lags])
+        future_pieces.append(value[..., lags:])
 
 
 class RepeatConstantOutput(nn.Module):

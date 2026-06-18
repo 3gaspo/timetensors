@@ -1,0 +1,84 @@
+#!/bin/bash
+#SBATCH --job-name=tt_sota_cmp
+#SBATCH --gres=gpu:1
+#SBATCH --output=script_outputs/tt_sota_cmp_%j.out
+#SBATCH --error=script_outputs/tt_sota_cmp_%j.err
+#SBATCH --time=23:00:00
+#SBATCH --partition=h100
+
+set -euo pipefail
+source .venv/bin/activate
+export PYTHONPATH="${PYTHONPATH:-}:$(pwd)"
+
+DATA_ROOT="${DATA_ROOT:-../datasets}"
+OUT_ROOT="${OUT_ROOT:-outputs/timetensor_sota_compare}"
+REBUILD_DATASETS="${REBUILD_DATASETS:-true}"
+RECOMPUTE_STATS="${RECOMPUTE_STATS:-true}"
+STATS_ARGS=()
+[ -n "${STATS_MAX_WINDOWS:-}" ] && STATS_ARGS+=(+experiment.stats_max_windows="$STATS_MAX_WINDOWS")
+
+DATASETS=("electricity" "traffic" "solar" "exchange_rate")
+SETTINGS=("1344 336" "672 168" "168 24" "24 24")
+MODELS=("patchtst" "chronos" "tabpfn")
+EVAL_STRIDE="${EVAL_STRIDE:-512}"
+PATCHTST_BATCH_SIZE="${PATCHTST_BATCH_SIZE:-128}"
+PATCHTST_EPOCHS="${PATCHTST_EPOCHS:-100}"
+SOTA_BATCH_SIZE="${SOTA_BATCH_SIZE:-350}"
+
+for dataset in "${DATASETS[@]}"; do
+  DATASET_DIR="${DATA_ROOT}/${dataset}"
+  rebuild_dataset="$REBUILD_DATASETS"
+  for setting in "${SETTINGS[@]}"; do
+    read -r L H <<< "$setting"
+    for model in "${MODELS[@]}"; do
+      epochs="$PATCHTST_EPOCHS"
+      batch_size="$PATCHTST_BATCH_SIZE"
+      model_args=()
+      if [ "$model" = "chronos" ]; then
+        epochs=0
+        batch_size="$SOTA_BATCH_SIZE"
+        model_args+=(+model.kwargs.device_map="${CHRONOS_DEVICE_MAP:-cuda}")
+        [ -n "${CHRONOS_WEIGHTS_PATH:-}" ] && model_args+=(+model.kwargs.weights_path="$CHRONOS_WEIGHTS_PATH")
+      elif [ "$model" = "tabpfn" ]; then
+        epochs=0
+        batch_size="$SOTA_BATCH_SIZE"
+        model_args+=(+model.kwargs.device="${TABPFN_DEVICE:-cuda}")
+        [ -n "${TABPFN_WEIGHTS_PATH:-}" ] && model_args+=(+model.kwargs.weights_path="$TABPFN_WEIGHTS_PATH")
+      fi
+
+      srun python -m timetensors.experiment \
+        +data.raw_path="${DATA_ROOT}/${dataset}" \
+        +data.path="$DATASET_DIR" \
+        +data.name="$dataset" \
+        +task.lags="$L" \
+        +task.horizon="$H" \
+        +data.splits.date_splits=[0.6,0.2,0.2] \
+        +data.sampling.train_idx_mode=random \
+        +data.sampling.eval_idx_mode=all \
+        +data.sampling.train_stride="$EVAL_STRIDE" \
+        +data.sampling.eval_stride="$EVAL_STRIDE" \
+        +data.sampling.remove_train_cte=true \
+        +data.sampling.remove_eval_cte=true \
+        +data.sampling.use_context=false \
+        +data.sampling.use_individual_context=false \
+        +data.sampling.use_global_context=false \
+        +training.batch_size="$batch_size" \
+        +training.device=gpu \
+        +training.epochs="$epochs" \
+        +training.loss=MSE \
+        +model.name="$model" \
+        +model.path="$model" \
+        "${model_args[@]}" \
+        +normalization.name=instance \
+        +experiment.rebuild_dataset="$rebuild_dataset" \
+        +experiment.recompute_stats="$RECOMPUTE_STATS" \
+        "${STATS_ARGS[@]}" \
+        +experiment.evaluate=true \
+        +experiment.seed="${SEED:-1}" \
+        +output.dir="${OUT_ROOT}/${dataset}/${L}_${H}" \
+        +output.name="$model" \
+        hydra.run.dir='outputs/hydra/${now:%Y-%m-%d}/${now:%H-%M-%S}'
+      rebuild_dataset=false
+    done
+  done
+done

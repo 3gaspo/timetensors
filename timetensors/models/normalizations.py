@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import torch
 import torch.nn as nn
 
@@ -343,7 +345,29 @@ class RMSNormalization(nn.Module):
         return y * self._scale
 
 
-def build_normalization(config: dict | None, *, dim: int | None = None) -> nn.Module:
+def _select_stats(
+    stats: Mapping[str, object] | None,
+    *,
+    split: str = "train",
+) -> Mapping[str, object] | None:
+    if not isinstance(stats, Mapping):
+        return None
+    payload = stats.get("stats") if isinstance(stats.get("stats"), Mapping) else stats
+    if not isinstance(payload, Mapping):
+        return None
+    if split in payload and isinstance(payload[split], Mapping):
+        return payload[split]
+    if "alpha" in payload or "beta" in payload:
+        return payload
+    return None
+
+
+def build_normalization(
+    config: dict | None,
+    *,
+    dim: int | None = None,
+    stats: Mapping[str, object] | None = None,
+) -> nn.Module:
     """Build a normalization module from a small config dictionary."""
     if config is None:
         return IdentityNormalization()
@@ -364,6 +388,22 @@ def build_normalization(config: dict | None, *, dim: int | None = None) -> nn.Mo
     if name == "revin":
         kwargs.setdefault("dim", dim)
         return RevINNormalization(**kwargs)
+    if name in {"grevin", "grevin_normalization", "generalized_revin", "cmin", "previn", "personalized_revin"}:
+        if dim is None:
+            raise ValueError(f"{name!r} normalization requires dim")
+        init_from_stats = bool(kwargs.pop("init_from_stats", False))
+        stats_split = str(kwargs.pop("stats_split", "train"))
+        stats_payload = kwargs.pop("stats", None)
+        if stats_payload is None and init_from_stats:
+            stats_payload = _select_stats(stats, split=stats_split)
+        from .grevin import build_grevin_normalization
+
+        return build_grevin_normalization(
+            name,
+            dim,
+            stats=stats_payload if isinstance(stats_payload, Mapping) else None,
+            **kwargs,
+        )
     if name == "sigmoid":
         return SigmoidNormalization(**kwargs)
     if name == "tanh":

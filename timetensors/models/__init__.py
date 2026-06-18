@@ -10,6 +10,7 @@ from .baselines import (
     RepeatBaseline,
 )
 from .losses import LossConfig, LossWrapper, build_loss, get_losses
+from .grevin import GRevINNormalization, build_grevin_normalization
 from .models import ModelConfig, TimeTensorModel, build_model_from_config, load_model
 from .normalizations import (
     IdentityNormalization,
@@ -29,13 +30,15 @@ from .normalizations import (
     normalize_standard,
 )
 from .pipeline import Batch, LearnerConfig, TorchLearner, cuda_available, cuda_diagnostics, load_learner, train_model
-from .sota import DLinear, PatchTST
+from .sota import Chronos, DLinear, PatchTST, TabPFN
 
 __all__ = [
     "Batch",
+    "Chronos",
     "CovariateAugmentation",
     "DLinear",
     "ExpectedBaseline",
+    "GRevINNormalization",
     "IdentityNormalization",
     "InstanceMinMaxNormalization",
     "LearnerConfig",
@@ -56,10 +59,12 @@ __all__ = [
     "SigmoidNormalization",
     "StandardNormalization",
     "TanhNormalization",
+    "TabPFN",
     "TimeTensorModel",
     "TorchLearner",
     "build_loss",
     "build_model_from_config",
+    "build_grevin_normalization",
     "build_normalization",
     "cuda_available",
     "cuda_diagnostics",

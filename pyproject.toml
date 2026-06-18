@@ -11,3 +11,9 @@ dependencies = [
     "pandas>=2.2.3",
     "torch==2.5.1",
 ]
+
+[project.optional-dependencies]
+sota = [
+    "chronos-forecasting>=2.0.1",
+    "tabpfn>=6.3.1",
+]

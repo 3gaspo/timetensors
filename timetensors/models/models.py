@@ -28,7 +28,7 @@ from .baselines import (
     RepeatBaseline,
 )
 from .normalizations import build_normalization
-from .sota import DLinear, PatchTST
+from .sota import Chronos, DLinear, PatchTST, TabPFN
 
 
 BASELINE_REGISTRY = {
@@ -43,6 +43,10 @@ BASELINE_REGISTRY = {
     "DLinear": DLinear,
     "patchtst": PatchTST,
     "PatchTST": PatchTST,
+    "chronos": Chronos,
+    "Chronos": Chronos,
+    "tabpfn": TabPFN,
+    "TabPFN": TabPFN,
 }
 
 
@@ -83,8 +87,10 @@ class TimeTensorModel(nn.Module):
         past_covariates: torch.Tensor | None = None,
         future_covariates: torch.Tensor | None = None,
         static_covariates: torch.Tensor | None = None,
+        cluster_ids: torch.Tensor | None = None,
         **kwargs,
     ) -> torch.Tensor:
+        self._set_normalization_cluster_ids(cluster_ids)
         x_norm = self.normalization(x)
         horizon = self._horizon()
         covariates = normalize_covariates(
@@ -151,6 +157,44 @@ class TimeTensorModel(nn.Module):
         text = self.architecture()
         print_fn(text)
         return text
+
+    def representation(
+        self,
+        x: torch.Tensor,
+        covariates=None,
+        past_covariates: torch.Tensor | None = None,
+        future_covariates: torch.Tensor | None = None,
+        static_covariates: torch.Tensor | None = None,
+        cluster_ids: torch.Tensor | None = None,
+        **kwargs,
+    ) -> torch.Tensor:
+        """Return base-model representations through the same wrapper inputs."""
+        if not hasattr(self.base_model, "representation"):
+            raise AttributeError(f"{self.base_model.__class__.__name__} has no representation()")
+        self._set_normalization_cluster_ids(cluster_ids)
+        x_norm = self.normalization(x)
+        horizon = self._horizon()
+        structured = normalize_covariates(
+            covariates,
+            lags=x_norm.shape[-1],
+            horizon=horizon,
+            past=past_covariates,
+            future=future_covariates,
+            static=static_covariates,
+        )
+        if self.covariate_augmentation is not None:
+            structured = self.covariate_augmentation(
+                x_norm,
+                structured,
+                horizon=horizon,
+                **kwargs,
+            )
+        return self.base_model.representation(x_norm, covariates=structured, **kwargs)
+
+    def _set_normalization_cluster_ids(self, cluster_ids: torch.Tensor | None) -> None:
+        set_cluster_ids = getattr(self.normalization, "set_cluster_ids", None)
+        if callable(set_cluster_ids):
+            set_cluster_ids(cluster_ids)
 
 
 @dataclass(frozen=True)
@@ -316,6 +360,7 @@ def build_model_from_config(
     *,
     state_dict: Mapping[str, Any] | None = None,
     state_dict_path: str | Path | None = None,
+    normalization_stats: Mapping[str, Any] | None = None,
 ) -> TimeTensorModel:
     config = (
         path_or_config
@@ -327,6 +372,7 @@ def build_model_from_config(
     normalization = build_normalization(
         dict(config.normalization) if config.normalization is not None else None,
         dim=dim,
+        stats=normalization_stats,
     )
     covariate_augmentation = (
         build_covariate_augmentation(dict(config.covariate_augmentation))
@@ -365,10 +411,12 @@ def load_model(
     *,
     state_dict: Mapping[str, Any] | None = None,
     state_dict_path: str | Path | None = None,
+    normalization_stats: Mapping[str, Any] | None = None,
 ) -> TimeTensorModel:
     """Load a wrapped model from specs and optional state dict."""
     return build_model_from_config(
         specs,
         state_dict=state_dict,
         state_dict_path=state_dict_path,
+        normalization_stats=normalization_stats,
     )

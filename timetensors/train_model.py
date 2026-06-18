@@ -80,7 +80,11 @@ def train_stage(
     shape = tuple(get_sizes(loaders))
     specs = model_specs(config, shape)
     init_path = pretrained_path(config)
-    model = load_model(specs, state_dict_path=init_path) if init_path else load_model(specs)
+    model = (
+        load_model(specs, state_dict_path=init_path, normalization_stats=stats)
+        if init_path
+        else load_model(specs, normalization_stats=stats)
+    )
     training = section(config, "training")
     criterion, eval_losses = get_losses(
         training.get("loss", "MSE"),
