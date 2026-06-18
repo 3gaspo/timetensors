@@ -28,7 +28,7 @@ python -m timetensors.experiment \
   +model.name=dlinear \
   +model.path=dlinear \
   +normalization.name=instance \
-  +training.batch_size=128 \
+  +training.batch_size=256 \
   +training.epochs=50 \
   +output.dir=outputs/timetensor_models/electricity/168_24 \
   +output.name=dlinear
@@ -103,6 +103,10 @@ Controls how dataset items are sampled from split tensors.
 | `use_global_context` | `true` | Include global context in batches. |
 
 Valid sampler modes are `random`, `dates`, `individuals`, and `all`.
+For `idx_mode=all`, the split dataset length is the number of accessible
+`(individual, date)` windows after stride and constant-window filtering. The
+dataloader length is the number of batches, i.e. `ceil(dataset_length /
+batch_size)`.
 
 ### `data.subsets` or top-level `subsets`
 
@@ -129,11 +133,11 @@ Valid subset modes are `dates`, `individuals`, and `all`.
 
 | Key | Default | Description |
 | --- | --- | --- |
-| `training.batch_size` | `32` | Batch size. |
+| `training.batch_size` | `256` | Batch size. If it exceeds a split dataset length, PyTorch returns one smaller batch. |
 | `training.epochs` | `1` | Training epochs; `0` skips optimization but still saves/evaluates. |
-| `training.loss` | `mse` | Training loss config. |
+| `training.loss` | `nmse` | Training loss config. |
 | `training.complete_evaluation` | `true` | Include extra eval metrics beyond `mse` and `nmse`. |
-| `training.lr` | `1e-3` | Learning rate. |
+| `training.lr` | `1e-5` | Learning rate. |
 | `training.optimizer` | `adam` | Optimizer name. |
 | `training.optimizer_kwargs` | `{}` | Extra optimizer kwargs. |
 | `training.grad_clip` | unset | Max gradient norm. |
@@ -410,7 +414,7 @@ Scripts live in `timetensors/slurm/` and use these shell variables:
 | `STATS_MAX_WINDOWS` | unset | Optional cap forwarded to `experiment.stats_max_windows`. |
 | `SEED` | `1` where used | Experiment seed. |
 | `SOTA_BATCH_SIZE` | `350` in SOTA scripts | Evaluation batch size for Chronos/TabPFN. |
-| `PATCHTST_BATCH_SIZE` | `128` | PatchTST batch size in `benchmark_sota_compare.slurm`. |
+| `PATCHTST_BATCH_SIZE` | `256` | PatchTST batch size in `benchmark_sota_compare.slurm`. |
 | `PATCHTST_EPOCHS` | `100` | PatchTST training epochs in `benchmark_sota_compare.slurm`. |
 | `CHRONOS_WEIGHTS_PATH` | unset | Optional Chronos local weights directory. |
 | `CHRONOS_DEVICE_MAP` | `cuda` | Chronos loading device map. |

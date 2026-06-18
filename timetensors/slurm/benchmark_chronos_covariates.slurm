@@ -77,7 +77,7 @@ for dataset in "${DATASETS[@]}"; do
         +training.batch_size="$BATCH_SIZE" \
         +training.device=gpu \
         +training.epochs=0 \
-        +training.loss=mse \
+        +training.loss=nmse \
         +model.name=chronos \
         +model.path=chronos \
         "${MODEL_ARGS[@]}" \

@@ -41,10 +41,10 @@ for dataset in "${DATASETS[@]}"; do
         +data.sampling.eval_idx_mode=all \
         +data.sampling.train_stride=1 \
         +data.sampling.eval_stride="$H" \
-        +training.batch_size=128 \
+        +training.batch_size=256 \
         +training.device=gpu \
         +training.epochs=50 \
-        +training.loss=mse \
+        +training.loss=nmse \
         +model.name=patchtst \
         +model.path=patchtst \
         +normalization.name=instance \

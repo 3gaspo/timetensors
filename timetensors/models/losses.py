@@ -26,9 +26,9 @@ def _criterion(name: str, *, reduction: str = "mean", kwargs: Mapping[str, Any] 
 class LossConfig:
     """Configuration for a forecasting loss."""
 
-    name: str = "mse"
+    name: str = "nmse"
     base: str = "mse"
-    scaling: str | None = None
+    scaling: str | None = "normal"
     reduction: str = "mean"
     eps: float = 1e-8
     kwargs: Mapping[str, Any] | None = None
@@ -41,7 +41,7 @@ class LossConfig:
             return config_to_loss_config(config)
         data = dict(config)
         return cls(
-            name=str(data.get("name", data.get("base", "mse"))),
+            name=str(data.get("name", data.get("base", "nmse"))),
             base=str(data.get("base", "mse")),
             scaling=data.get("scaling"),
             reduction=str(data.get("reduction", "mean")),
@@ -158,7 +158,7 @@ def build_loss(config: Mapping[str, Any] | str | LossConfig | LossWrapper | None
 
 
 def get_losses(
-    criterion_name: str | Mapping[str, Any] = "mse",
+    criterion_name: str | Mapping[str, Any] = "nmse",
     *,
     complete_evaluation: bool = False,
 ) -> tuple[LossWrapper, dict[str, LossWrapper]]:

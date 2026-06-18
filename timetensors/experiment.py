@@ -9,7 +9,7 @@ from typing import Any, Mapping
 from .dataset import get_sizes
 from .eval_model import eval_stage
 from .load_dataset import build_dataset_stage
-from .runtime import pretrained_path, rebuild_dataset, recompute_stats, run_dir, section, setup_logging, to_plain_config
+from .runtime import device, pretrained_path, rebuild_dataset, recompute_stats, run_dir, section, setup_logging, to_plain_config
 from .train_model import train_stage
 from .visu.experiment_plots import save_criterion_loss_plot
 
@@ -29,6 +29,24 @@ def _log_loader_sizes(loaders: Mapping[str, Any] | None) -> None:
         LOGGER.debug("could not log loader sizes: %s", exc)
 
 
+def _log_device_once(
+    learner: Any,
+    *,
+    requested: str,
+    logged: bool,
+) -> bool:
+    if logged or learner is None:
+        return logged
+    resolved = getattr(learner, "device", "unknown")
+    LOGGER.info(
+        "device requested=%s resolved=%s cuda=%s",
+        requested,
+        resolved,
+        str(resolved).startswith("cuda"),
+    )
+    return True
+
+
 def run_experiment(config: Mapping[str, Any]) -> dict[str, Any]:
     """Run the configured TimeTensor experiment."""
     config = to_plain_config(config)
@@ -39,14 +57,18 @@ def run_experiment(config: Mapping[str, Any]) -> dict[str, Any]:
     loaders = None
     stats = None
     out_dir = run_dir(config)
+    model_config = section(config, "model")
+    model_name = model_config.get("name", model_config.get("path", "linear"))
+    LOGGER.info("%s", "=" * 72)
     LOGGER.info(
-        "experiment out=%s rebuild_dataset=%s evaluate=%s",
+        "experiment model=%s out=%s rebuild_dataset=%s evaluate=%s",
+        model_name,
         out_dir,
         rebuild_dataset(config),
         bool(experiment.get("evaluate", True)),
     )
     LOGGER.info("stats recompute=%s", recompute_stats(config))
-    logged_sizes = False
+    logged_device = False
 
     if rebuild_dataset(config):
         LOGGER.info("dataset start")
@@ -56,8 +78,6 @@ def run_experiment(config: Mapping[str, Any]) -> dict[str, Any]:
         results["dataset_path"] = str(dataset_result["dataset_path"])
         results["shape"] = dataset_result.get("shape")
         LOGGER.info("dataset done")
-        _log_loader_sizes(loaders)
-        logged_sizes = loaders is not None
     else:
         LOGGER.info("dataset rebuild skipped")
 
@@ -73,11 +93,14 @@ def run_experiment(config: Mapping[str, Any]) -> dict[str, Any]:
         stats = train_result["stats"]
         results["state_path"] = str(train_result["state_path"])
         results["train_history_path"] = str(out_dir / "train_history.pt")
-        if not logged_sizes:
-            _log_loader_sizes(loaders)
-            logged_sizes = True
+        logged_device = _log_device_once(
+            train_result.get("learner"),
+            requested=device(config),
+            logged=logged_device,
+        )
         history = train_result["history"]
         if history.get("train"):
+            _log_loader_sizes(loaders)
             criterion_name = train_result["learner"].criterion.name
             plot_path = save_criterion_loss_plot(
                 history,
@@ -86,7 +109,9 @@ def run_experiment(config: Mapping[str, Any]) -> dict[str, Any]:
             )
             results["criterion_loss_plot_path"] = str(plot_path)
             LOGGER.info("saved criterion_loss=%s", plot_path.name)
-        LOGGER.info("training done")
+            LOGGER.info("training done")
+        else:
+            LOGGER.info("no training required reason=%s", history.get("skipped", "unknown"))
     elif has_pretrained:
         results["state_path"] = str(pretrained_path(config))
         LOGGER.info("training skipped pretrained=true")
@@ -110,11 +135,17 @@ def run_experiment(config: Mapping[str, Any]) -> dict[str, Any]:
         results["per_user_all_losses_path"] = str(eval_result["per_user_all_losses_path"])
         if eval_result.get("example_prediction_path") is not None:
             results["example_prediction_path"] = str(eval_result["example_prediction_path"])
+        logged_device = _log_device_once(
+            eval_result.get("learner"),
+            requested=device(config),
+            logged=logged_device,
+        )
         LOGGER.info("evaluation done")
     else:
         LOGGER.info("evaluation skipped")
 
     LOGGER.info("experiment done seconds=%.2f", perf_counter() - start)
+    LOGGER.info("%s", "=" * 72)
     return results
 
 

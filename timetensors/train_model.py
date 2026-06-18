@@ -8,7 +8,7 @@ from typing import Any, Mapping
 
 from .dataset import fetch_training_data, get_sizes
 from .load_dataset import build_dataset_stage
-from .models import TorchLearner, cuda_diagnostics, get_losses, load_model
+from .models import TorchLearner, get_losses, load_model
 from .runtime import (
     batch_size,
     dataset_path,
@@ -34,10 +34,6 @@ from .runtime import (
 
 
 LOGGER = logging.getLogger(__name__)
-
-
-def _cuda_available() -> bool:
-    return bool(cuda_diagnostics().get("cuda_available"))
 
 
 def _fetch_loaders(config: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
@@ -87,25 +83,18 @@ def train_stage(
     )
     training = section(config, "training")
     criterion, eval_losses = get_losses(
-        training.get("loss", "mse"),
+        training.get("loss", "nmse"),
         complete_evaluation=bool(training.get("complete_evaluation", True)),
     )
     learner = TorchLearner(
         model,
         criterion,
         eval_losses=eval_losses,
-        lr=float(training.get("lr", 1e-3)),
+        lr=float(training.get("lr", 1e-5)),
         device=device(config),
         optimizer_name=str(training.get("optimizer", "adam")),
         optimizer_kwargs=training.get("optimizer_kwargs"),
         grad_clip=training.get("grad_clip"),
-    )
-    requested_device = device(config)
-    LOGGER.info(
-        "device requested=%s resolved=%s cuda=%s",
-        requested_device,
-        learner.device,
-        _cuda_available(),
     )
     epochs = int(training.get("epochs", 1))
     trainable = any(param.requires_grad for param in learner.model.parameters())
@@ -127,7 +116,6 @@ def train_stage(
             "elapsed_seconds": 0.0,
             "skipped": "no trainable parameters" if not trainable else "epochs <= 0",
         }
-        LOGGER.info("training_skipped reason=%s", history["skipped"])
     out_dir = run_dir(config)
     state_path = learner.model.save_state_dict(out_dir / "model_state.pt")
     save_torch(history, out_dir / "train_history.pt")

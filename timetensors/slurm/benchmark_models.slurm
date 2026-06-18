@@ -42,10 +42,10 @@ for dataset in "${DATASETS[@]}"; do
         +data.sampling.train_idx_mode=random \
         +data.sampling.eval_idx_mode=all \
         +data.sampling.eval_stride="$EVAL_STRIDE" \
-        +training.batch_size=128 \
+        +training.batch_size=256 \
         +training.device=gpu \
         +training.epochs="$epochs" \
-        +training.loss=mse \
+        +training.loss=nmse \
         +model.name="$model" \
         +model.path="$model" \
         +normalization.name=instance \

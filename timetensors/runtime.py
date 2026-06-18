@@ -167,7 +167,7 @@ def task_shape(config: Mapping[str, Any]) -> tuple[int, int]:
 
 def batch_size(config: Mapping[str, Any]) -> int:
     training = section(config, "training")
-    return int(training.get("batch_size", 32))
+    return int(training.get("batch_size", 256))
 
 
 def seed(config: Mapping[str, Any]) -> int | None:

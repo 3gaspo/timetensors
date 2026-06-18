@@ -2784,12 +2784,34 @@ def get_sizes(
     ]
     if not str_info:
         return shape
+
+    def index_mode(dataset: Dataset) -> str:
+        if isinstance(dataset, AggregatedTimeSeriesDataset):
+            modes = [
+                component.index_sampler.config.idx_mode
+                for component in dataset.datasets
+            ]
+            unique_modes = list(dict.fromkeys(modes))
+            return (
+                unique_modes[0]
+                if len(unique_modes) == 1
+                else "aggregate[" + ",".join(unique_modes) + "]"
+            )
+        if isinstance(dataset, TimeSeriesDataset):
+            return dataset.index_sampler.config.idx_mode
+        return "unknown"
+
     shape_str = "Splits:\n" + "\n".join(
-        f"{key}\t{loader.dataset.shape}" for key, loader in loaders_dict.items()
+        f"{key}\tidx_mode={index_mode(loader.dataset)}\t{loader.dataset.shape}"
+        for key, loader in loaders_dict.items()
     )
     batch_str = "\n".join(
         [
             "Batch:",
+            " batches="
+            + ", ".join(
+                f"{key}={len(loader)}" for key, loader in loaders_dict.items()
+            ),
             f" inputs={list(batch['inputs'].shape)}",
             f" targets={list(batch['targets'].shape)}",
             " individual_context="
@@ -2804,7 +2826,6 @@ def get_sizes(
                 if batch["global_context"] is None
                 else str(list(batch["global_context"].shape))
             ),
-            f" metadata={list(batch['metadata'])}",
         ]
     )
     return shape, shape_str, batch_str

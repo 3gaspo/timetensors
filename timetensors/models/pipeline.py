@@ -40,7 +40,7 @@ class Batch:
 class LearnerConfig:
     """Small config object for a learner."""
 
-    lr: float = 1e-3
+    lr: float = 1e-5
     device: str | torch.device | None = None
     optimizer: str = "adam"
     optimizer_kwargs: Mapping[str, Any] | None = None
@@ -51,7 +51,7 @@ class LearnerConfig:
     def from_dict(cls, config: Mapping[str, Any] | None) -> "LearnerConfig":
         data = dict(config or {})
         return cls(
-            lr=float(data.get("lr", 1e-3)),
+            lr=float(data.get("lr", 1e-5)),
             device=data.get("device"),
             optimizer=str(data.get("optimizer", "adam")),
             optimizer_kwargs=data.get("optimizer_kwargs", data.get("kwargs")),
@@ -224,7 +224,7 @@ def build_optimizer(
     parameters,
     *,
     name: str = "adam",
-    lr: float = 1e-3,
+    lr: float = 1e-5,
     kwargs: Mapping[str, Any] | None = None,
 ) -> optim.Optimizer:
     kwargs = dict(kwargs or {})
@@ -249,7 +249,7 @@ class TorchLearner:
         criterion: LossWrapper | Mapping[str, Any] | str | None = None,
         *,
         eval_losses: Mapping[str, LossWrapper] | None = None,
-        lr: float = 1e-3,
+        lr: float = 1e-5,
         device: str | torch.device | None = None,
         optimizer: optim.Optimizer | Callable[[Iterable[nn.Parameter]], optim.Optimizer] | None = None,
         optimizer_name: str = "adam",
@@ -261,7 +261,7 @@ class TorchLearner:
         self.model = model.to(resolved_device)
         self.device = next(self.model.parameters(), torch.empty(0, device=resolved_device)).device
         self.criterion = build_loss(criterion)
-        self.eval_losses = dict(eval_losses or get_losses("mse")[1])
+        self.eval_losses = dict(eval_losses or get_losses("nmse")[1])
         self.lr = float(lr)
         self.grad_clip = None if grad_clip is None else float(grad_clip)
         self.optimizer_factory = optimizer

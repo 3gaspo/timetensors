@@ -21,7 +21,7 @@ DATASETS=("electricity" "traffic" "solar" "exchange_rate")
 SETTINGS=("1344 336" "672 168" "168 24" "24 24")
 MODELS=("patchtst" "chronos" "tabpfn")
 EVAL_STRIDE="${EVAL_STRIDE:-512}"
-PATCHTST_BATCH_SIZE="${PATCHTST_BATCH_SIZE:-128}"
+PATCHTST_BATCH_SIZE="${PATCHTST_BATCH_SIZE:-256}"
 PATCHTST_EPOCHS="${PATCHTST_EPOCHS:-100}"
 SOTA_BATCH_SIZE="${SOTA_BATCH_SIZE:-350}"
 
@@ -65,7 +65,7 @@ for dataset in "${DATASETS[@]}"; do
         +training.batch_size="$batch_size" \
         +training.device=gpu \
         +training.epochs="$epochs" \
-        +training.loss=mse \
+        +training.loss=nmse \
         +model.name="$model" \
         +model.path="$model" \
         "${model_args[@]}" \

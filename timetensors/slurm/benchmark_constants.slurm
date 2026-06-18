@@ -45,7 +45,7 @@ for dataset in "${DATASETS[@]}"; do
         +data.sampling.eval_stride="$H" \
         +data.sampling.remove_train_cte="$rm_train" \
         +data.sampling.remove_eval_cte="$rm_eval" \
-        +training.batch_size=128 \
+        +training.batch_size=256 \
         +training.device=gpu \
         +training.epochs=50 \
         +model.name=linear \

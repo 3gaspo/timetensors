@@ -9,7 +9,7 @@ from typing import Any, Mapping
 import torch
 
 from .dataset import fetch_training_data, get_sizes
-from .models import TorchLearner, cuda_diagnostics, get_losses, load_model
+from .models import TorchLearner, get_losses, load_model
 from .runtime import (
     batch_size,
     dataset_path,
@@ -30,10 +30,6 @@ from .runtime import (
 
 
 LOGGER = logging.getLogger(__name__)
-
-
-def _cuda_summary() -> dict[str, Any]:
-    return cuda_diagnostics()
 
 
 def _fetch_loaders(config: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
@@ -150,7 +146,7 @@ def eval_stage(
     shape = tuple(get_sizes(loaders))
     training = section(config, "training")
     criterion, eval_losses = get_losses(
-        training.get("loss", "mse"),
+        training.get("loss", "nmse"),
         complete_evaluation=bool(training.get("complete_evaluation", True)),
     )
     if learner is None:
@@ -160,15 +156,9 @@ def eval_stage(
             model,
             criterion,
             eval_losses=eval_losses,
-            lr=float(training.get("lr", 1e-3)),
+            lr=float(training.get("lr", 1e-5)),
             device=device(config),
         )
-    LOGGER.info(
-        "eval_device requested=%s resolved=%s cuda=%s",
-        device(config),
-        learner.device,
-        bool(_cuda_summary().get("cuda_available")),
-    )
     evaluation = section(config, "evaluation")
     selected = evaluation.get("splits")
     if isinstance(selected, str):
@@ -177,7 +167,6 @@ def eval_stage(
     out_dir = run_dir(config)
     all_losses = {}
     per_user = {}
-    LOGGER.info("evaluating splits=%s", selected)
     for split in selected:
         if split not in loaders:
             LOGGER.warning("missing evaluation split=%s", split)
@@ -189,7 +178,6 @@ def eval_stage(
             seed=seed(config),
         )["losses"]
         per_user[split] = evaluate_per_user_all(learner, loaders[split])
-        LOGGER.info("evaluated split=%s", split)
     all_path = save_torch(all_losses, out_dir / "all_losses.pt")
     per_user_path = save_torch(per_user, out_dir / "per_user_all_losses.pt")
     example_path = None
