@@ -8,23 +8,27 @@
 
 set -euo pipefail
 source .venv/bin/activate
-export PYTHONPATH="${PYTHONPATH:-}:$(pwd)"
+export PYTHONPATH="$(pwd)"
 
-DATA_ROOT="${DATA_ROOT:-../datasets}"
-OUT_ROOT="${OUT_ROOT:-outputs/timetensor_chronos_covariates}"
-REBUILD_DATASETS="${REBUILD_DATASETS:-true}"
-RECOMPUTE_STATS="${RECOMPUTE_STATS:-true}"
-ELECTRICITY_DROP_USERS="${ELECTRICITY_DROP_USERS:-57;106;127;182;298;6;113;143}"
+DATA_ROOT="../datasets"
+OUT_ROOT="outputs/timetensor_chronos_covariates"
+REBUILD_DATASETS=true
+RECOMPUTE_STATS=true
+ELECTRICITY_DROP_USERS="57;106;127;182;298;6;113;143"
+STATS_MAX_WINDOWS=""
+SEED=1
+CHRONOS_DEVICE_MAP="cuda"
+CHRONOS_WEIGHTS_PATH=""
 STATS_ARGS=()
-[ -n "${STATS_MAX_WINDOWS:-}" ] && STATS_ARGS+=(+experiment.stats_max_windows="$STATS_MAX_WINDOWS")
+[ -n "$STATS_MAX_WINDOWS" ] && STATS_ARGS+=(+experiment.stats_max_windows="$STATS_MAX_WINDOWS")
 
 DATASETS=("electricity" "traffic" "solar" "exchange_rate")
 SETTINGS=("1344 336" "672 168" "168 24" "24 24")
-EVAL_STRIDE="${EVAL_STRIDE:-512}"
-BATCH_SIZE="${SOTA_BATCH_SIZE:-350}"
+EVAL_STRIDE=512
+BATCH_SIZE=350
 
-MODEL_ARGS=(+model.kwargs.device_map="${CHRONOS_DEVICE_MAP:-cuda}")
-[ -n "${CHRONOS_WEIGHTS_PATH:-}" ] && MODEL_ARGS+=(+model.kwargs.weights_path="$CHRONOS_WEIGHTS_PATH")
+MODEL_ARGS=(+model.kwargs.device_map="$CHRONOS_DEVICE_MAP")
+[ -n "$CHRONOS_WEIGHTS_PATH" ] && MODEL_ARGS+=(+model.kwargs.weights_path="$CHRONOS_WEIGHTS_PATH")
 
 # Format: output_suffix|hydra_modes
 AUGMENTS=(
@@ -48,7 +52,7 @@ AUGMENTS=(
 for dataset in "${DATASETS[@]}"; do
   DATASET_DIR="${DATA_ROOT}/${dataset}"
   DATA_ARGS=()
-  [ "$dataset" = "electricity" ] && DATA_ARGS+=(+data.drop_users="$ELECTRICITY_DROP_USERS")
+  [ "$dataset" = "electricity" ] && DATA_ARGS+=("+data.drop_users='$ELECTRICITY_DROP_USERS'")
   rebuild_dataset="$REBUILD_DATASETS"
   for setting in "${SETTINGS[@]}"; do
     read -r L H <<< "$setting"
@@ -91,7 +95,7 @@ for dataset in "${DATASETS[@]}"; do
         +experiment.recompute_stats="$RECOMPUTE_STATS" \
         "${STATS_ARGS[@]}" \
         +experiment.evaluate=true \
-        +experiment.seed="${SEED:-1}" \
+        +experiment.seed="$SEED" \
         +output.dir="${OUT_ROOT}/${dataset}/${L}_${H}" \
         +output.name="chronos_${suffix}" \
         hydra.run.dir='outputs/hydra/${now:%Y-%m-%d}/${now:%H-%M-%S}'

@@ -8,28 +8,34 @@
 
 set -euo pipefail
 source .venv/bin/activate
-export PYTHONPATH="${PYTHONPATH:-}:$(pwd)"
+export PYTHONPATH="$(pwd)"
 
-DATA_ROOT="${DATA_ROOT:-../datasets}"
-OUT_ROOT="${OUT_ROOT:-outputs/timetensor_sota_compare}"
-REBUILD_DATASETS="${REBUILD_DATASETS:-true}"
-RECOMPUTE_STATS="${RECOMPUTE_STATS:-true}"
-ELECTRICITY_DROP_USERS="${ELECTRICITY_DROP_USERS:-57;106;127;182;298;6;113;143}"
+DATA_ROOT="../datasets"
+OUT_ROOT="outputs/timetensor_sota_compare"
+REBUILD_DATASETS=true
+RECOMPUTE_STATS=true
+ELECTRICITY_DROP_USERS="57;106;127;182;298;6;113;143"
+STATS_MAX_WINDOWS=""
+SEED=1
+CHRONOS_DEVICE_MAP="cuda"
+TABPFN_DEVICE="cuda"
+CHRONOS_WEIGHTS_PATH=""
+TABPFN_WEIGHTS_PATH=""
 STATS_ARGS=()
-[ -n "${STATS_MAX_WINDOWS:-}" ] && STATS_ARGS+=(+experiment.stats_max_windows="$STATS_MAX_WINDOWS")
+[ -n "$STATS_MAX_WINDOWS" ] && STATS_ARGS+=(+experiment.stats_max_windows="$STATS_MAX_WINDOWS")
 
 DATASETS=("electricity" "traffic" "solar" "exchange_rate")
 SETTINGS=("1344 336" "672 168" "168 24" "24 24")
 MODELS=("patchtst" "chronos" "tabpfn")
-EVAL_STRIDE="${EVAL_STRIDE:-512}"
-PATCHTST_BATCH_SIZE="${PATCHTST_BATCH_SIZE:-256}"
-PATCHTST_EPOCHS="${PATCHTST_EPOCHS:-200}"
-SOTA_BATCH_SIZE="${SOTA_BATCH_SIZE:-350}"
+EVAL_STRIDE=512
+PATCHTST_BATCH_SIZE=256
+PATCHTST_EPOCHS=200
+SOTA_BATCH_SIZE=350
 
 for dataset in "${DATASETS[@]}"; do
   DATASET_DIR="${DATA_ROOT}/${dataset}"
   DATA_ARGS=()
-  [ "$dataset" = "electricity" ] && DATA_ARGS+=(+data.drop_users="$ELECTRICITY_DROP_USERS")
+  [ "$dataset" = "electricity" ] && DATA_ARGS+=("+data.drop_users='$ELECTRICITY_DROP_USERS'")
   rebuild_dataset="$REBUILD_DATASETS"
   for setting in "${SETTINGS[@]}"; do
     read -r L H <<< "$setting"
@@ -40,13 +46,13 @@ for dataset in "${DATASETS[@]}"; do
       if [ "$model" = "chronos" ]; then
         epochs=0
         batch_size="$SOTA_BATCH_SIZE"
-        model_args+=(+model.kwargs.device_map="${CHRONOS_DEVICE_MAP:-cuda}")
-        [ -n "${CHRONOS_WEIGHTS_PATH:-}" ] && model_args+=(+model.kwargs.weights_path="$CHRONOS_WEIGHTS_PATH")
+        model_args+=(+model.kwargs.device_map="$CHRONOS_DEVICE_MAP")
+        [ -n "$CHRONOS_WEIGHTS_PATH" ] && model_args+=(+model.kwargs.weights_path="$CHRONOS_WEIGHTS_PATH")
       elif [ "$model" = "tabpfn" ]; then
         epochs=0
         batch_size="$SOTA_BATCH_SIZE"
-        model_args+=(+model.kwargs.device="${TABPFN_DEVICE:-cuda}")
-        [ -n "${TABPFN_WEIGHTS_PATH:-}" ] && model_args+=(+model.kwargs.weights_path="$TABPFN_WEIGHTS_PATH")
+        model_args+=(+model.kwargs.device="$TABPFN_DEVICE")
+        [ -n "$TABPFN_WEIGHTS_PATH" ] && model_args+=(+model.kwargs.weights_path="$TABPFN_WEIGHTS_PATH")
       fi
 
       srun python -m timetensors.experiment \
@@ -78,7 +84,7 @@ for dataset in "${DATASETS[@]}"; do
         +experiment.recompute_stats="$RECOMPUTE_STATS" \
         "${STATS_ARGS[@]}" \
         +experiment.evaluate=true \
-        +experiment.seed="${SEED:-1}" \
+        +experiment.seed="$SEED" \
         +output.dir="${OUT_ROOT}/${dataset}/${L}_${H}" \
         +output.name="$model" \
         hydra.run.dir='outputs/hydra/${now:%Y-%m-%d}/${now:%H-%M-%S}'

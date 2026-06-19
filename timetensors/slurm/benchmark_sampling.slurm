@@ -8,23 +8,24 @@
 
 set -euo pipefail
 source .venv/bin/activate
-export PYTHONPATH="${PYTHONPATH:-}:$(pwd)"
+export PYTHONPATH="$(pwd)"
 
 DATA_ROOT="../datasets"
 OUT_ROOT="outputs/timetensor_sampling"
-REBUILD_DATASETS="${REBUILD_DATASETS:-true}"
-RECOMPUTE_STATS="${RECOMPUTE_STATS:-true}"
-ELECTRICITY_DROP_USERS="${ELECTRICITY_DROP_USERS:-57;106;127;182;298;6;113;143}"
+REBUILD_DATASETS=true
+RECOMPUTE_STATS=true
+ELECTRICITY_DROP_USERS="57;106;127;182;298;6;113;143"
+STATS_MAX_WINDOWS=""
 STATS_ARGS=()
-[ -n "${STATS_MAX_WINDOWS:-}" ] && STATS_ARGS+=(+experiment.stats_max_windows="$STATS_MAX_WINDOWS")
+[ -n "$STATS_MAX_WINDOWS" ] && STATS_ARGS+=(+experiment.stats_max_windows="$STATS_MAX_WINDOWS")
 DATASETS=("electricity" "traffic" "solar")
 SETTINGS=("168 24" "672 168" "1344 336")
-SEED="${SEED:-1}"
+SEED=1
 
 for dataset in "${DATASETS[@]}"; do
   DATASET_DIR="${DATA_ROOT}/${dataset}"
   DATA_ARGS=()
-  [ "$dataset" = "electricity" ] && DATA_ARGS+=(+data.drop_users="$ELECTRICITY_DROP_USERS")
+  [ "$dataset" = "electricity" ] && DATA_ARGS+=("+data.drop_users='$ELECTRICITY_DROP_USERS'")
   rebuild_dataset="$REBUILD_DATASETS"
   for setting in "${SETTINGS[@]}"; do
     read -r L H <<< "$setting"
