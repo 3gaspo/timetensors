@@ -17,10 +17,10 @@ RECOMPUTE_STATS="${RECOMPUTE_STATS:-true}"
 STATS_ARGS=()
 [ -n "${STATS_MAX_WINDOWS:-}" ] && STATS_ARGS+=(+experiment.stats_max_windows="$STATS_MAX_WINDOWS")
 
-DATASETS=("electricity" "solar")
-SETTINGS=("168 24" "672 168")
+DATASETS=("electricity") # "solar")
+SETTINGS=("168 24") # "672 168")
 EVAL_STRIDE=256
-MODELS=("persistence" "dlinear")
+MODELS=("patchtst") #persistence" "dlinear")
 
 for dataset in "${DATASETS[@]}"; do
   DATASET_DIR="${DATA_ROOT}/${dataset}"
@@ -28,7 +28,7 @@ for dataset in "${DATASETS[@]}"; do
   for setting in "${SETTINGS[@]}"; do
     read -r L H <<< "$setting"
     for model in "${MODELS[@]}"; do
-      epochs=200
+      epochs=1000
       if [[ "$model" =~ ^(persistence|expected|repeat)$ ]]; then
         epochs=0
       fi
