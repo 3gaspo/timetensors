@@ -444,6 +444,7 @@ clusters. They use these shell variables:
 | `REBUILD_DATASETS` | `true` | Rebuild tensors for the first run of each dataset. |
 | `RECOMPUTE_STATS` | `true` | Recompute L/H-dependent stats for each run. |
 | `STATS_MAX_WINDOWS` | unset | Optional cap forwarded to `experiment.stats_max_windows`. |
+| `ELECTRICITY_DROP_USERS` | `57;106;127;182;298;6;113;143` | Electricity series dropped by Slurm launchers, matching the legacy config. |
 | `SEED` | `1` where used | Experiment seed. |
 | `SOTA_BATCH_SIZE` | `350` in SOTA scripts | Evaluation batch size for Chronos/TabPFN. |
 | `PATCHTST_BATCH_SIZE` | `256` | PatchTST batch size in `benchmark_sota_compare.slurm`. |

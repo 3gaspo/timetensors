@@ -14,6 +14,7 @@ DATA_ROOT="../datasets"
 OUT_ROOT="outputs/timetensor_backprop"
 REBUILD_DATASETS="${REBUILD_DATASETS:-true}"
 RECOMPUTE_STATS="${RECOMPUTE_STATS:-true}"
+ELECTRICITY_DROP_USERS="${ELECTRICITY_DROP_USERS:-57;106;127;182;298;6;113;143}"
 STATS_ARGS=()
 [ -n "${STATS_MAX_WINDOWS:-}" ] && STATS_ARGS+=(+experiment.stats_max_windows="$STATS_MAX_WINDOWS")
 DATASETS=("electricity" "traffic")
@@ -23,6 +24,8 @@ OPTIMS=("adam" "adamw" "sgd")
 
 for dataset in "${DATASETS[@]}"; do
   DATASET_DIR="${DATA_ROOT}/${dataset}"
+  DATA_ARGS=()
+  [ "$dataset" = "electricity" ] && DATA_ARGS+=(+data.drop_users="$ELECTRICITY_DROP_USERS")
   rebuild_dataset="$REBUILD_DATASETS"
   for setting in "${SETTINGS[@]}"; do
     read -r L H <<< "$setting"
@@ -34,6 +37,7 @@ for dataset in "${DATASETS[@]}"; do
           +data.raw_path="${DATA_ROOT}/${dataset}" \
           +data.path="$DATASET_DIR" \
           +data.name="$dataset" \
+          "${DATA_ARGS[@]}" \
           +task.lags="$L" \
           +task.horizon="$H" \
           +data.splits.date_splits=[0.6,0.2,0.2] \
