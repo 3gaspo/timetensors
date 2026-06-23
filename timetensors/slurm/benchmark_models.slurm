@@ -11,7 +11,7 @@ source .venv/bin/activate
 export PYTHONPATH="$(pwd)"
 
 DATA_ROOT="../datasets"
-OUT_ROOT="outputs/timetensor_models"
+OUT_ROOT="outputs/results"
 REBUILD_DATASETS=true
 RECOMPUTE_STATS=true
 ELECTRICITY_DROP_USERS="57;106;127;182;298;6;113;143"
@@ -64,3 +64,5 @@ for dataset in "${DATASETS[@]}"; do
     done
   done
 done
+
+srun python -m timetensors.results_table "$OUT_ROOT" --metric mse --split test1

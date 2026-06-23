@@ -31,7 +31,7 @@ python -m timetensors.experiment \
   +normalization.name=instance \
   +training.batch_size=256 \
   +training.epochs=200 \
-  +output.dir=outputs/timetensor_models/electricity/168_24 \
+  +output.dir=outputs/results/electricity/168_24 \
   +output.name=dlinear
 ```
 
@@ -209,24 +209,20 @@ Set `+experiment.plot_weights=true` to save `linear_weights.pt` and
 `linear_weights.pdf` for PyTorch linear models. The sklearn trainer saves these
 artifacts by default.
 
-Chronos and TabPFN are optional SOTA wrappers. They use the normal
-`TimeTensorModel` path, including normalization, structured covariates, and
-constant-output handling. Install the optional dependencies before using them:
-
-```bash
-pip install -e ".[sota]"
-```
+Chronos and TabPFN use the normal `TimeTensorModel` path, including
+normalization, structured covariates, and constant-output handling. Their
+Python packages are installed with the project's standard dependencies.
 
 Useful SOTA kwargs:
 
 | Model | Kwarg | Meaning |
 | --- | --- | --- |
-| `chronos` | `weights_path` | Local Chronos-2 weights directory. If unset, the wrapper first checks the new package path, then the legacy `timetensors_old` path. |
+| `chronos` | `weights_path` | Local Chronos-2 weights directory. Defaults to the shared `../weights/chronos2` directory. |
 | `chronos` | `cross_learning` | Forwarded to `pipeline.predict(...)`. |
 | `chronos` | `shared_context` | Treat context batches as shared across forecast samples. |
 | `chronos` | `device_map` | Chronos loading device map, usually `cuda` or `cpu`. |
 | `chronos` | `context_mode` | `structured`, `past_only`, or `future_included`. |
-| `tabpfn` | `weights_path` | Local TabPFN checkpoint path. If unset, the wrapper first checks the new package path, then the legacy `timetensors_old` path. |
+| `tabpfn` | `weights_path` | Local TabPFN checkpoint path. Defaults to `../weights/tabpfnts/tabpfn-v2.5-regressor-v2.5_default.ckpt`. |
 | `tabpfn` | `cross_learning` | Fit one tabular regressor over the whole batch instead of one fit per sample. |
 | `tabpfn` | `dimension_encoding` | `ordinal` or `one-hot` series identity features. |
 | `tabpfn` | `context_as_features` | Use future-known covariates as tabular features instead of extra training rows. |
@@ -335,7 +331,7 @@ Grevin stats initialization uses loader statistics from the selected split:
 
 | Key | Default | Description |
 | --- | --- | --- |
-| `output.dir` | `outputs` | Parent output directory. |
+| `output.dir` | `outputs/results` | Parent model-result directory. |
 | `output.name` | `model.name` | Run directory name under `output.dir`. |
 
 The run directory is:
@@ -348,6 +344,34 @@ Saved artifacts include `model_state.pt`, `train_history.pt`,
 `train_metadata.pt`, `criterion_loss.pdf`, `all_losses.pt`,
 `per_user_all_losses.pt`, and optionally `example_prediction.pdf`.
 
+### LaTeX result tables
+
+`timetensors.results_table` recursively reads an experiment tree laid out as
+`<root>/<dataset>/<L>_<H>/<method>/all_losses.pt` and writes a complete LaTeX
+table. The default metric is test-split MSE, values have two decimals, the best
+method in every row is bold, and every row displays its automatically selected
+power-of-ten scale. Improvements are relative to the first displayed method
+unless `--reference` is passed.
+
+```bash
+python -m timetensors.results_table outputs/results \
+  --split test1 --metric mse \
+  --datasets electricity,traffic \
+  --dataset-settings electricity=168_24,672_168 \
+  --dataset-settings traffic=168_24 \
+  --methods persistence,dlinear,patchtst \
+  --reference persistence --decimals 2
+```
+
+Useful switches are `--no-bold`, `--higher-is-better`,
+`--no-dataset-improvements`, `--no-setting-improvements`,
+`--no-overall-improvement`, `--no-auto-scale`, `--scale-exponent`, and repeatable
+`--row-scale DATASET/L_H=EXPONENT`. `--settings` applies one L-H subset globally;
+repeatable `--dataset-settings` overrides it for named datasets. The output
+defaults to `<root>/results_<metric>.tex`; use `--output`, `--caption`, and
+`--label` to customize it. The generated table uses the LaTeX `booktabs`,
+`multirow`, and `graphicx` packages.
+
 ### `misc`
 
 | Key | Default | Description |
@@ -356,7 +380,9 @@ Saved artifacts include `model_state.pt`, `train_history.pt`,
 
 ### Hydra
 
-Hydra's own job directory is separate from TimeTensor's `output.dir`.
+Hydra's own job directory is separate from TimeTensor's `output.dir`. All entry
+points default to the following run directory (and use
+`outputs/hydra/multirun/` for sweeps):
 
 ```bash
 hydra.run.dir='outputs/hydra/${now:%Y-%m-%d}/${now:%H-%M-%S}'
@@ -449,15 +475,17 @@ clusters. They use these shell variables:
 | `SOTA_BATCH_SIZE` | `350` in SOTA scripts | Evaluation batch size for Chronos/TabPFN. |
 | `PATCHTST_BATCH_SIZE` | `256` | PatchTST batch size in `benchmark_sota_compare.slurm`. |
 | `PATCHTST_EPOCHS` | `200` | PatchTST training epochs in `benchmark_sota_compare.slurm`. |
-| `CHRONOS_WEIGHTS_PATH` | unset | Optional Chronos local weights directory. |
+| `CHRONOS_WEIGHTS_PATH` | `../weights/chronos2` | Shared Chronos local weights directory. |
 | `CHRONOS_DEVICE_MAP` | `cuda` | Chronos loading device map. |
-| `TABPFN_WEIGHTS_PATH` | unset | Optional TabPFN checkpoint path. |
+| `TABPFN_WEIGHTS_PATH` | `../weights/tabpfnts/tabpfn-v2.5-regressor-v2.5_default.ckpt` | Shared TabPFN checkpoint path. |
 | `TABPFN_DEVICE` | `cuda` | TabPFN regressor device. |
 | `TRAIN_STRIDE` | `24` in `benchmark_linear_models.slurm` | Train stride for linear-model comparison. |
 | `EVAL_STRIDE` | `24` in `benchmark_linear_models.slurm` | Eval stride for linear-model comparison. |
 
 `benchmark_chronos_covariates.slurm` defines explicit augmentation specs in
 its `AUGMENTS` array, including mixed `past_only` and `future_included` runs.
+Every benchmark job runs `timetensors.results_table` once after its sweep and
+writes `results_mse.tex` under that job's `OUT_ROOT`.
 
 Submit from the repository root in a Slurm environment:
 

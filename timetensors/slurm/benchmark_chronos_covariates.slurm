@@ -18,7 +18,7 @@ ELECTRICITY_DROP_USERS="57;106;127;182;298;6;113;143"
 STATS_MAX_WINDOWS=""
 SEED=1
 CHRONOS_DEVICE_MAP="cuda"
-CHRONOS_WEIGHTS_PATH=""
+CHRONOS_WEIGHTS_PATH="../weights/chronos2"
 STATS_ARGS=()
 [ -n "$STATS_MAX_WINDOWS" ] && STATS_ARGS+=(+experiment.stats_max_windows="$STATS_MAX_WINDOWS")
 
@@ -103,3 +103,5 @@ for dataset in "${DATASETS[@]}"; do
     done
   done
 done
+
+srun python -m timetensors.results_table "$OUT_ROOT" --metric mse --split test1

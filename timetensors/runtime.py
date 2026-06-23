@@ -114,7 +114,7 @@ def dataset_path(config: Mapping[str, Any]) -> Path:
 
 def output_dir(config: Mapping[str, Any]) -> Path:
     output = section(config, "output")
-    return ensure_dir(output.get("dir", "outputs"))
+    return ensure_dir(output.get("dir", "outputs/results"))
 
 
 def save_name(config: Mapping[str, Any]) -> str:

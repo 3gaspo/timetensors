@@ -225,7 +225,7 @@ def results_table(run_dir: str | Path) -> dict[str, Any]:
     return {path.name: load_json(path) for path in json_files}
 
 
-def display_dashboard(default_run_dir: str | Path = "../outputs/model") -> None:
+def display_dashboard(default_run_dir: str | Path = "../../outputs/results") -> None:
     import ipywidgets as widgets
     from IPython.display import clear_output, display
 

@@ -37,10 +37,7 @@ def _existing_path(*candidates: str | Path | None) -> Path | None:
 
 def _default_weights_path() -> Path | None:
     repo_root = Path(__file__).resolve().parents[3]
-    return _existing_path(
-        Path(__file__).resolve().parent / "chronos2" / "weights",
-        repo_root / "timetensors_old" / "src" / "timetensor" / "sota" / "chronos2" / "weights",
-    )
+    return _existing_path(repo_root.parent / "weights" / "chronos2")
 
 
 class Chronos(nn.Module):
@@ -82,7 +79,7 @@ class Chronos(nn.Module):
         if model_path is None:
             raise FileNotFoundError(
                 "Chronos weights were not found. Pass model.kwargs.weights_path "
-                "or place weights under timetensors/models/sota/chronos2/weights."
+                "or place weights under ../weights/chronos2."
             )
 
         base_pipeline = _import_chronos()

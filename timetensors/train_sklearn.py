@@ -223,7 +223,7 @@ except Exception:  # pragma: no cover
 
 if hydra is not None:
 
-    @hydra.main(version_base=None, config_path=None, config_name=None)
+    @hydra.main(version_base=None, config_path="conf", config_name="config")
     def _hydra_main(cfg):
         main(cfg)
 

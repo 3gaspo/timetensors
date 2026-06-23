@@ -1,5 +1,7 @@
 .venv
 __pycache__/
 outputs/
-script_outputs/
+script_outputs/*
+!script_outputs/.gitkeep
 timetensors_old/
+timetensor_old/

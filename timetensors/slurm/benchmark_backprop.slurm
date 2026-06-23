@@ -59,9 +59,12 @@ for dataset in "${DATASETS[@]}"; do
           +experiment.recompute_stats="$RECOMPUTE_STATS" \
           "${STATS_ARGS[@]}" \
           +output.dir="${OUT_ROOT}/${dataset}/${L}_${H}" \
-          +output.name="linear_${loss}_${optim}"
+          +output.name="linear_${loss}_${optim}" \
+          hydra.run.dir='outputs/hydra/${now:%Y-%m-%d}/${now:%H-%M-%S}'
         rebuild_dataset=false
       done
     done
   done
 done
+
+srun python -m timetensors.results_table "$OUT_ROOT" --metric mse --split test1

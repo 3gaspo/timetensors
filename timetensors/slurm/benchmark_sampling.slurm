@@ -59,8 +59,11 @@ for dataset in "${DATASETS[@]}"; do
         +experiment.evaluate=true \
         +experiment.seed="$SEED" \
         +output.dir="${OUT_ROOT}/${dataset}/${L}_${H}" \
-        +output.name="patchtst_sampling_${sampling_name}"
+        +output.name="patchtst_sampling_${sampling_name}" \
+        hydra.run.dir='outputs/hydra/${now:%Y-%m-%d}/${now:%H-%M-%S}'
       rebuild_dataset=false
     done
   done
 done
+
+srun python -m timetensors.results_table "$OUT_ROOT" --metric mse --split test1

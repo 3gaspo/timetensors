@@ -9,6 +9,7 @@ Run from the repository root:
 python tests/test_config_defaults.py
 python tests/test_dataloaders.py
 python tests/test_models.py
+python tests/test_results_table.py
 ```
 
 The scripts intentionally avoid large datasets, checkpoints, and long training

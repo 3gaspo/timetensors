@@ -19,8 +19,8 @@ STATS_MAX_WINDOWS=""
 SEED=1
 CHRONOS_DEVICE_MAP="cuda"
 TABPFN_DEVICE="cuda"
-CHRONOS_WEIGHTS_PATH=""
-TABPFN_WEIGHTS_PATH=""
+CHRONOS_WEIGHTS_PATH="../weights/chronos2"
+TABPFN_WEIGHTS_PATH="../weights/tabpfnts/tabpfn-v2.5-regressor-v2.5_default.ckpt"
 STATS_ARGS=()
 [ -n "$STATS_MAX_WINDOWS" ] && STATS_ARGS+=(+experiment.stats_max_windows="$STATS_MAX_WINDOWS")
 
@@ -92,3 +92,5 @@ for dataset in "${DATASETS[@]}"; do
     done
   done
 done
+
+srun python -m timetensors.results_table "$OUT_ROOT" --metric mse --split test1

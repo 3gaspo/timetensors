@@ -39,14 +39,9 @@ def _existing_path(*candidates: str | Path | None) -> Path | None:
 def _default_weights_path() -> Path | None:
     repo_root = Path(__file__).resolve().parents[3]
     return _existing_path(
-        Path(__file__).resolve().parent / "tabpfnts" / "weights" / "tabpfn-v2.5-regressor-v2.5_default.ckpt",
-        repo_root
-        / "timetensors_old"
-        / "src"
-        / "timetensor"
-        / "sota"
-        / "tabpfnts"
+        repo_root.parent
         / "weights"
+        / "tabpfnts"
         / "tabpfn-v2.5-regressor-v2.5_default.ckpt",
     )
 
@@ -99,7 +94,7 @@ class TabPFN(nn.Module):
         if model_path is None:
             raise FileNotFoundError(
                 "TabPFN weights were not found. Pass model.kwargs.weights_path "
-                "or place the checkpoint under timetensors/models/sota/tabpfnts/weights."
+                "or place the checkpoint under ../weights/tabpfnts/."
             )
 
         regressor = _import_tabpfn()

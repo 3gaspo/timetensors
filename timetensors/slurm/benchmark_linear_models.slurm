@@ -90,3 +90,5 @@ for dataset in "${DATASETS[@]}"; do
     done
   done
 done
+
+srun python -m timetensors.results_table "$OUT_ROOT" --metric mse --split test1
