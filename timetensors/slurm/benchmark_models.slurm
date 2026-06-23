@@ -19,10 +19,11 @@ STATS_MAX_WINDOWS=""
 STATS_ARGS=()
 [ -n "$STATS_MAX_WINDOWS" ] && STATS_ARGS+=(+experiment.stats_max_windows="$STATS_MAX_WINDOWS")
 
-DATASETS=("electricity") # "solar")
-SETTINGS=("168 24") # "672 168")
+DATASETS=("electricity" "solar")
+SETTINGS=("168 24" "672 168")
 EVAL_STRIDE=256
-MODELS=("patchtst") #persistence" "dlinear")
+MODELS=("chronos" "persistence" "expected" "repeat" "lookback" "linear" "periodic_linear" "dlinear" "patchtst")
+
 
 for dataset in "${DATASETS[@]}"; do
   DATASET_DIR="${DATA_ROOT}/${dataset}"

@@ -1,0 +1,28 @@
+2026-06-23 16:07:09,313 INFO [__main__] ========================================================================
+2026-06-23 16:07:09,313 INFO [__main__] experiment model=chronos out=/home/h61084/codes/timetensors/outputs/results/electricity/168_24/chronos rebuild_dataset=True evaluate=True
+2026-06-23 16:07:09,313 INFO [__main__] stats recompute=True
+2026-06-23 16:07:09,313 INFO [__main__] dataset start
+2026-06-23 16:11:11,362 INFO [__main__] dataset done
+2026-06-23 16:11:11,362 INFO [__main__] training start
+2026-06-23 16:11:33,058 INFO [timetensors.train_model] device requested=gpu resolved=cuda:0 cuda=True
+2026-06-23 16:11:33,158 INFO [timetensors.train_model] data_shape=[168, 1, 24]
+2026-06-23 16:11:33,159 INFO [timetensors.train_model] Splits:
+train	idx_mode=individuals	{'values': (313, 1, 15782), 'individual_context': None, 'global_context': None, 'sampled_individuals': 313, 'sampled_dates': 15591, 'samples': 313}
+valid1	idx_mode=all	{'values': (313, 1, 5261), 'individual_context': None, 'global_context': None, 'sampled_individuals': 313, 'sampled_dates': 20, 'samples': 6260}
+test1	idx_mode=all	{'values': (313, 1, 5261), 'individual_context': None, 'global_context': None, 'sampled_individuals': 313, 'sampled_dates': 20, 'samples': 6260}
+2026-06-23 16:11:33,159 INFO [timetensors.train_model] Batch:
+ batches=train=2, valid1=25, test1=25
+ inputs=[256, 1, 168]
+ targets=[256, 1, 24]
+ individual_context=None
+ global_context=None
+2026-06-23 16:11:33,171 INFO [__main__] no training required reason=no trainable parameters
+2026-06-23 16:11:33,171 INFO [__main__] evaluation start
+2026-06-23 16:11:40,515 INFO [__main__] evaluation done
+2026-06-23 16:11:40,515 INFO [__main__] experiment done seconds=271.21
+2026-06-23 16:11:40,515 INFO [__main__] ========================================================================
+2026-06-23 16:11:47,003 INFO [__main__] ========================================================================
+2026-06-23 16:11:47,003 INFO [__main__] experiment model=persistence out=/home/h61084/codes/timetensors/outputs/results/electricity/168_24/persistence rebuild_dataset=False evaluate=True
+2026-06-23 16:11:47,003 INFO [__main__] stats recompute=True
+2026-06-23 16:11:47,004 INFO [__main__] dataset rebuild skipped
+2026-06-23 16:11:47,004 INFO [__main__] training start

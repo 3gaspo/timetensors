@@ -1,0 +1,28 @@
+Error executing job with overrides: ['+data.raw_path=../datasets/electricity', '+data.path=../datasets/electricity', '+data.name=electricity', "+data.drop_users='57;106;127;182;298;6;113;143'", '+task.lags=168', '+task.horizon=24', '+data.splits.date_splits=[0.6,0.2,0.2]', '+data.sampling.train_idx_mode=individuals', '+data.sampling.eval_idx_mode=all', '+data.sampling.eval_stride=256', '+training.batch_size=256', '+training.device=gpu', '+training.epochs=1000', '+training.loss=nmse', '+model.name=expectated', '+model.path=expectated', '+normalization.name=instance', '+experiment.rebuild_dataset=false', '+experiment.recompute_stats=true', '+output.dir=outputs/results/electricity/168_24', '+output.name=expectated']
+Traceback (most recent call last):
+  File "/home/h61084/codes/timetensors/timetensors/experiment.py", line 151, in _hydra_main
+    main(cfg)
+  File "/home/h61084/codes/timetensors/timetensors/experiment.py", line 138, in main
+    return run_experiment(config or {})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/h61084/codes/timetensors/timetensors/experiment.py", line 78, in run_experiment
+    train_result = train_stage(config, loaders=loaders, stats=stats)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/h61084/codes/timetensors/timetensors/train_model.py", line 94, in train_stage
+    else load_model(specs, normalization_stats=stats)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/h61084/codes/timetensors/timetensors/models/models.py", line 411, in load_model
+    return build_model_from_config(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/h61084/codes/timetensors/timetensors/models/models.py", line 364, in build_model_from_config
+    base = build_base_model(config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/h61084/codes/timetensors/timetensors/models/models.py", line 341, in build_base_model
+    target = load_object(config.path, base_dir=base_dir, class_name=config.class_name)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/h61084/codes/timetensors/timetensors/models/models.py", line 336, in load_object
+    raise ValueError(f"cannot resolve model path {path!r}")
+ValueError: cannot resolve model path 'expectated'
+
+Set the environment variable HYDRA_FULL_ERROR=1 for a complete stack trace.
+srun: error: dgx-h100-bis: task 0: Exited with exit code 1
