@@ -1,0 +1,165 @@
+2026-06-25 09:28:09,281 INFO [__main__] ========================================================================
+2026-06-25 09:28:09,281 INFO [__main__] experiment model=chronos out=/home/h61084/codes/timetensors/outputs/results/electricity/168_24/chronos rebuild_dataset=True evaluate=True
+2026-06-25 09:28:09,281 INFO [__main__] stats recompute=True
+2026-06-25 09:28:09,281 INFO [__main__] dataset start
+2026-06-25 09:32:07,802 INFO [__main__] dataset done
+2026-06-25 09:32:07,803 INFO [__main__] training start
+2026-06-25 09:32:20,419 INFO [timetensors.train_model] device requested=gpu resolved=cuda:0 cuda=True
+2026-06-25 09:32:20,519 INFO [timetensors.train_model] data_shape=[168, 1, 24]
+2026-06-25 09:32:20,519 INFO [timetensors.train_model] Splits:
+train	idx_mode=individuals	{'values': (313, 1, 15782), 'individual_context': None, 'global_context': None, 'sampled_individuals': 313, 'sampled_dates': 15591, 'samples': 313}
+valid1	idx_mode=all	{'values': (313, 1, 5261), 'individual_context': None, 'global_context': None, 'sampled_individuals': 313, 'sampled_dates': 20, 'samples': 6260}
+test1	idx_mode=all	{'values': (313, 1, 5261), 'individual_context': None, 'global_context': None, 'sampled_individuals': 313, 'sampled_dates': 20, 'samples': 6260}
+2026-06-25 09:32:20,519 INFO [timetensors.train_model] Batch:
+ batches=train=2, valid1=25, test1=25
+ inputs=[256, 1, 168]
+ targets=[256, 1, 24]
+ individual_context=None
+ global_context=None
+2026-06-25 09:32:20,532 INFO [__main__] no training required reason=no trainable parameters
+2026-06-25 09:32:20,533 INFO [__main__] evaluation start
+2026-06-25 09:32:26,829 INFO [__main__] evaluation done
+2026-06-25 09:32:26,830 INFO [__main__] experiment done seconds=257.56
+2026-06-25 09:32:26,830 INFO [__main__] ========================================================================
+2026-06-25 09:32:33,276 INFO [__main__] ========================================================================
+2026-06-25 09:32:33,276 INFO [__main__] experiment model=persistence out=/home/h61084/codes/timetensors/outputs/results/electricity/168_24/persistence rebuild_dataset=False evaluate=True
+2026-06-25 09:32:33,276 INFO [__main__] stats recompute=True
+2026-06-25 09:32:33,276 INFO [__main__] dataset rebuild skipped
+2026-06-25 09:32:33,276 INFO [__main__] training start
+2026-06-25 09:36:33,974 INFO [timetensors.train_model] device requested=gpu resolved=cuda:0 cuda=True
+2026-06-25 09:36:34,075 INFO [timetensors.train_model] data_shape=[168, 1, 24]
+2026-06-25 09:36:34,075 INFO [timetensors.train_model] Splits:
+train	idx_mode=individuals	{'values': (313, 1, 15782), 'individual_context': None, 'global_context': None, 'sampled_individuals': 313, 'sampled_dates': 15591, 'samples': 313}
+valid1	idx_mode=all	{'values': (313, 1, 5261), 'individual_context': None, 'global_context': None, 'sampled_individuals': 313, 'sampled_dates': 20, 'samples': 6260}
+test1	idx_mode=all	{'values': (313, 1, 5261), 'individual_context': None, 'global_context': None, 'sampled_individuals': 313, 'sampled_dates': 20, 'samples': 6260}
+2026-06-25 09:36:34,075 INFO [timetensors.train_model] Batch:
+ batches=train=2, valid1=25, test1=25
+ inputs=[256, 1, 168]
+ targets=[256, 1, 24]
+ individual_context=None
+ global_context=None
+2026-06-25 09:36:34,087 INFO [__main__] no training required reason=no trainable parameters
+2026-06-25 09:36:34,087 INFO [__main__] evaluation start
+2026-06-25 09:36:35,865 INFO [__main__] evaluation done
+2026-06-25 09:36:35,865 INFO [__main__] experiment done seconds=242.59
+2026-06-25 09:36:35,865 INFO [__main__] ========================================================================
+2026-06-25 09:36:42,960 INFO [__main__] ========================================================================
+2026-06-25 09:36:42,960 INFO [__main__] experiment model=expected out=/home/h61084/codes/timetensors/outputs/results/electricity/168_24/expected rebuild_dataset=False evaluate=True
+2026-06-25 09:36:42,961 INFO [__main__] stats recompute=True
+2026-06-25 09:36:42,961 INFO [__main__] dataset rebuild skipped
+2026-06-25 09:36:42,961 INFO [__main__] training start
+2026-06-25 09:40:41,420 INFO [timetensors.train_model] device requested=gpu resolved=cuda:0 cuda=True
+2026-06-25 09:40:41,520 INFO [timetensors.train_model] data_shape=[168, 1, 24]
+2026-06-25 09:40:41,520 INFO [timetensors.train_model] Splits:
+train	idx_mode=individuals	{'values': (313, 1, 15782), 'individual_context': None, 'global_context': None, 'sampled_individuals': 313, 'sampled_dates': 15591, 'samples': 313}
+valid1	idx_mode=all	{'values': (313, 1, 5261), 'individual_context': None, 'global_context': None, 'sampled_individuals': 313, 'sampled_dates': 20, 'samples': 6260}
+test1	idx_mode=all	{'values': (313, 1, 5261), 'individual_context': None, 'global_context': None, 'sampled_individuals': 313, 'sampled_dates': 20, 'samples': 6260}
+2026-06-25 09:40:41,520 INFO [timetensors.train_model] Batch:
+ batches=train=2, valid1=25, test1=25
+ inputs=[256, 1, 168]
+ targets=[256, 1, 24]
+ individual_context=None
+ global_context=None
+2026-06-25 09:40:41,533 INFO [__main__] no training required reason=no trainable parameters
+2026-06-25 09:40:41,533 INFO [__main__] evaluation start
+2026-06-25 09:40:43,281 INFO [__main__] evaluation done
+2026-06-25 09:40:43,281 INFO [__main__] experiment done seconds=240.32
+2026-06-25 09:40:43,281 INFO [__main__] ========================================================================
+2026-06-25 09:40:49,820 INFO [__main__] ========================================================================
+2026-06-25 09:40:49,820 INFO [__main__] experiment model=repeat out=/home/h61084/codes/timetensors/outputs/results/electricity/168_24/repeat rebuild_dataset=False evaluate=True
+2026-06-25 09:40:49,820 INFO [__main__] stats recompute=True
+2026-06-25 09:40:49,821 INFO [__main__] dataset rebuild skipped
+2026-06-25 09:40:49,821 INFO [__main__] training start
+2026-06-25 09:44:49,800 INFO [timetensors.train_model] device requested=gpu resolved=cuda:0 cuda=True
+2026-06-25 09:44:49,900 INFO [timetensors.train_model] data_shape=[168, 1, 24]
+2026-06-25 09:44:49,900 INFO [timetensors.train_model] Splits:
+train	idx_mode=individuals	{'values': (313, 1, 15782), 'individual_context': None, 'global_context': None, 'sampled_individuals': 313, 'sampled_dates': 15591, 'samples': 313}
+valid1	idx_mode=all	{'values': (313, 1, 5261), 'individual_context': None, 'global_context': None, 'sampled_individuals': 313, 'sampled_dates': 20, 'samples': 6260}
+test1	idx_mode=all	{'values': (313, 1, 5261), 'individual_context': None, 'global_context': None, 'sampled_individuals': 313, 'sampled_dates': 20, 'samples': 6260}
+2026-06-25 09:44:49,900 INFO [timetensors.train_model] Batch:
+ batches=train=2, valid1=25, test1=25
+ inputs=[256, 1, 168]
+ targets=[256, 1, 24]
+ individual_context=None
+ global_context=None
+2026-06-25 09:44:49,913 INFO [__main__] no training required reason=no trainable parameters
+2026-06-25 09:44:49,913 INFO [__main__] evaluation start
+2026-06-25 09:44:51,636 INFO [__main__] evaluation done
+2026-06-25 09:44:51,636 INFO [__main__] experiment done seconds=241.82
+2026-06-25 09:44:51,636 INFO [__main__] ========================================================================
+2026-06-25 09:44:58,165 INFO [__main__] ========================================================================
+2026-06-25 09:44:58,165 INFO [__main__] experiment model=lookback out=/home/h61084/codes/timetensors/outputs/results/electricity/168_24/lookback rebuild_dataset=False evaluate=True
+2026-06-25 09:44:58,165 INFO [__main__] stats recompute=True
+2026-06-25 09:44:58,165 INFO [__main__] dataset rebuild skipped
+2026-06-25 09:44:58,165 INFO [__main__] training start
+2026-06-25 09:48:57,300 INFO [timetensors.train_model] device requested=gpu resolved=cuda:0 cuda=True
+2026-06-25 09:48:57,398 INFO [timetensors.train_model] data_shape=[168, 1, 24]
+2026-06-25 09:48:57,399 INFO [timetensors.train_model] Splits:
+train	idx_mode=individuals	{'values': (313, 1, 15782), 'individual_context': None, 'global_context': None, 'sampled_individuals': 313, 'sampled_dates': 15591, 'samples': 313}
+valid1	idx_mode=all	{'values': (313, 1, 5261), 'individual_context': None, 'global_context': None, 'sampled_individuals': 313, 'sampled_dates': 20, 'samples': 6260}
+test1	idx_mode=all	{'values': (313, 1, 5261), 'individual_context': None, 'global_context': None, 'sampled_individuals': 313, 'sampled_dates': 20, 'samples': 6260}
+2026-06-25 09:48:57,399 INFO [timetensors.train_model] Batch:
+ batches=train=2, valid1=25, test1=25
+ inputs=[256, 1, 168]
+ targets=[256, 1, 24]
+ individual_context=None
+ global_context=None
+2026-06-25 09:48:57,412 INFO [__main__] no training required reason=no trainable parameters
+2026-06-25 09:48:57,412 INFO [__main__] evaluation start
+2026-06-25 09:48:59,178 INFO [__main__] evaluation done
+2026-06-25 09:48:59,178 INFO [__main__] experiment done seconds=241.02
+2026-06-25 09:48:59,178 INFO [__main__] ========================================================================
+2026-06-25 09:49:05,658 INFO [__main__] ========================================================================
+2026-06-25 09:49:05,659 INFO [__main__] experiment model=linear out=/home/h61084/codes/timetensors/outputs/results/electricity/168_24/linear rebuild_dataset=False evaluate=True
+2026-06-25 09:49:05,659 INFO [__main__] stats recompute=True
+2026-06-25 09:49:05,659 INFO [__main__] dataset rebuild skipped
+2026-06-25 09:49:05,659 INFO [__main__] training start
+2026-06-25 09:53:13,293 INFO [timetensors.train_model] device requested=gpu resolved=cuda:0 cuda=True
+2026-06-25 09:53:13,395 INFO [timetensors.train_model] data_shape=[168, 1, 24]
+2026-06-25 09:53:13,395 INFO [timetensors.train_model] Splits:
+train	idx_mode=individuals	{'values': (313, 1, 15782), 'individual_context': None, 'global_context': None, 'sampled_individuals': 313, 'sampled_dates': 15591, 'samples': 313}
+valid1	idx_mode=all	{'values': (313, 1, 5261), 'individual_context': None, 'global_context': None, 'sampled_individuals': 313, 'sampled_dates': 20, 'samples': 6260}
+test1	idx_mode=all	{'values': (313, 1, 5261), 'individual_context': None, 'global_context': None, 'sampled_individuals': 313, 'sampled_dates': 20, 'samples': 6260}
+2026-06-25 09:53:13,395 INFO [timetensors.train_model] Batch:
+ batches=train=2, valid1=25, test1=25
+ inputs=[256, 1, 168]
+ targets=[256, 1, 24]
+ individual_context=None
+ global_context=None
+2026-06-25 09:53:13,395 INFO [timetensors.train_model] training epochs=1000 steps_per_epoch=2 total_steps=2000 eval_every_steps=100 log_every_steps=1000
+2026-06-25 09:53:16,253 INFO [timetensors.train_model] step=1 train=1.247602
+2026-06-25 09:53:16,602 INFO [timetensors.train_model] step=1 valid[valid1]={'mse': 1.2718927856705313, 'nmse': 1.2718927856705313, 'mae': 0.9229820275839906, 'nmae': 0.9229820275839906, 'rmse': 0.18692623662491575}
+2026-06-25 09:53:22,900 INFO [timetensors.train_model] step=100 valid[valid1]={'mse': 1.1508481904213674, 'nmse': 1.1508481904213674, 'mae': 0.8707265738100289, 'nmae': 0.8707265738100289, 'rmse': 0.1706193625355681}
+2026-06-25 09:53:29,413 INFO [timetensors.train_model] step=200 valid[valid1]={'mse': 1.046040526238747, 'nmse': 1.046040526238747, 'mae': 0.8229268424427166, 'nmae': 0.8229268424427166, 'rmse': 0.15648263214241329}
+2026-06-25 09:53:35,899 INFO [timetensors.train_model] step=300 valid[valid1]={'mse': 0.9558003840989833, 'nmse': 0.9558003840989833, 'mae': 0.7793281189549846, 'nmae': 0.7793281189549846, 'rmse': 0.14431036115327456}
+2026-06-25 09:53:42,285 INFO [timetensors.train_model] step=400 valid[valid1]={'mse': 0.8785179048808365, 'nmse': 0.8785179048808365, 'mae': 0.7401130180643263, 'nmae': 0.7401130180643263, 'rmse': 0.13390320929221577}
+2026-06-25 09:53:48,754 INFO [timetensors.train_model] step=500 valid[valid1]={'mse': 0.8133599229514028, 'nmse': 0.8133599229514028, 'mae': 0.7054255240768417, 'nmae': 0.7054255240768417, 'rmse': 0.12513631063020522}
+2026-06-25 09:53:55,138 INFO [timetensors.train_model] step=600 valid[valid1]={'mse': 0.7565713559476712, 'nmse': 0.7565713559476712, 'mae': 0.6736538758039221, 'nmae': 0.6736538758039221, 'rmse': 0.11751829356558152}
+2026-06-25 09:54:01,518 INFO [timetensors.train_model] step=700 valid[valid1]={'mse': 0.7085036979569668, 'nmse': 0.7085036979569668, 'mae': 0.6454394940751048, 'nmae': 0.6454394940751048, 'rmse': 0.11107934620687629}
+2026-06-25 09:54:07,997 INFO [timetensors.train_model] step=800 valid[valid1]={'mse': 0.6673556944305777, 'nmse': 0.6673556944305777, 'mae': 0.6203458938354882, 'nmae': 0.6203458938354882, 'rmse': 0.10557514603018633}
+2026-06-25 09:54:14,380 INFO [timetensors.train_model] step=900 valid[valid1]={'mse': 0.6317799821067542, 'nmse': 0.6317799821067542, 'mae': 0.5976973983553397, 'nmae': 0.5976973983553397, 'rmse': 0.10082924713849767}
+2026-06-25 09:54:20,629 INFO [timetensors.train_model] step=1000 train=0.976716
+2026-06-25 09:54:20,889 INFO [timetensors.train_model] step=1000 valid[valid1]={'mse': 0.6014998743709284, 'nmse': 0.6014998743709284, 'mae': 0.5778251639824198, 'nmae': 0.5778251639824198, 'rmse': 0.09678999318863256}
+2026-06-25 09:54:27,397 INFO [timetensors.train_model] step=1100 valid[valid1]={'mse': 0.5751060770215571, 'nmse': 0.5751060770215571, 'mae': 0.559830397665818, 'nmae': 0.559830397665818, 'rmse': 0.09326726996733611}
+2026-06-25 09:54:33,778 INFO [timetensors.train_model] step=1200 valid[valid1]={'mse': 0.5522982092584157, 'nmse': 0.5522982092584157, 'mae': 0.5438682523652261, 'nmae': 0.5438682523652261, 'rmse': 0.0902282897656718}
+2026-06-25 09:54:40,280 INFO [timetensors.train_model] step=1300 valid[valid1]={'mse': 0.5318726422814642, 'nmse': 0.5318726422814642, 'mae': 0.5291771682560508, 'nmae': 0.5291771682560508, 'rmse': 0.08751486228804746}
+2026-06-25 09:54:46,676 INFO [timetensors.train_model] step=1400 valid[valid1]={'mse': 0.5141383592566997, 'nmse': 0.5141383592566997, 'mae': 0.5161090359266319, 'nmae': 0.5161090359266319, 'rmse': 0.08514892915313363}
+2026-06-25 09:54:53,055 INFO [timetensors.train_model] step=1500 valid[valid1]={'mse': 0.4985703119962487, 'nmse': 0.4985703119962487, 'mae': 0.5045075210392539, 'nmae': 0.5045075210392539, 'rmse': 0.08305658334360336}
+2026-06-25 09:54:59,528 INFO [timetensors.train_model] step=1600 valid[valid1]={'mse': 0.4847421798462304, 'nmse': 0.4847421798462304, 'mae': 0.4941042102817783, 'nmae': 0.4941042102817783, 'rmse': 0.08119469826467755}
+2026-06-25 09:55:05,935 INFO [timetensors.train_model] step=1700 valid[valid1]={'mse': 0.47235685029603675, 'nmse': 0.47235685029603675, 'mae': 0.48468257591239433, 'nmae': 0.48468257591239433, 'rmse': 0.07950282305066451}
+2026-06-25 09:55:12,435 INFO [timetensors.train_model] step=1800 valid[valid1]={'mse': 0.46104406452280516, 'nmse': 0.46104406452280516, 'mae': 0.47589923667704587, 'nmae': 0.47589923667704587, 'rmse': 0.07797020037715047}
+2026-06-25 09:55:18,927 INFO [timetensors.train_model] step=1900 valid[valid1]={'mse': 0.45094572073354505, 'nmse': 0.45094572073354505, 'mae': 0.4680969197656146, 'nmae': 0.4680969197656146, 'rmse': 0.07657323924624247}
+2026-06-25 09:55:25,077 INFO [timetensors.train_model] step=2000 train=0.561489
+2026-06-25 09:55:25,336 INFO [timetensors.train_model] step=2000 valid[valid1]={'mse': 0.4418990170739837, 'nmse': 0.4418990170739837, 'mae': 0.46106577701588913, 'nmae': 0.46106577701588913, 'rmse': 0.07531274540609699}
+2026-06-25 09:55:25,337 INFO [timetensors.train_model] training_done steps=2000 seconds=131.94
+2026-06-25 09:55:25,941 INFO [__main__] saved criterion_loss=criterion_loss.pdf
+2026-06-25 09:55:25,941 INFO [__main__] training done
+2026-06-25 09:55:25,941 INFO [__main__] evaluation start
+2026-06-25 09:55:27,606 INFO [__main__] evaluation done
+2026-06-25 09:55:27,606 INFO [__main__] experiment done seconds=381.95
+2026-06-25 09:55:27,606 INFO [__main__] ========================================================================
+2026-06-25 09:55:34,431 INFO [__main__] ========================================================================
+2026-06-25 09:55:34,432 INFO [__main__] experiment model=periodic_linear out=/home/h61084/codes/timetensors/outputs/results/electricity/168_24/periodic_linear rebuild_dataset=False evaluate=True
+2026-06-25 09:55:34,432 INFO [__main__] stats recompute=True
+2026-06-25 09:55:34,432 INFO [__main__] dataset rebuild skipped
+2026-06-25 09:55:34,432 INFO [__main__] training start
