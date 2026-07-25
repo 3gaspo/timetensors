@@ -1,7 +1,7 @@
 [project]
 name = "timetensors"
 version = "0.1.0"
-description = "Add your description here"
+description = "Time-series forecasting benchmarks for data, model, and training choices"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -15,3 +15,13 @@ dependencies = [
     "tabpfn>=6.3.1",
     "torch==2.5.1",
 ]
+
+[tool.setuptools]
+py-modules = ["runtime"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+conf = ["*.yaml"]
+visu = ["*.ipynb"]

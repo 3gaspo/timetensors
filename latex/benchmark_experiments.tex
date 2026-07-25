@@ -1,0 +1,124 @@
+\documentclass[10pt]{article}
+\usepackage[a4paper,margin=2cm]{geometry}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{hyperref}
+
+\title{TimeTensors Benchmark Protocol}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Common protocol}
+
+The default methodology study uses ETTh1, Electricity, Traffic, Solar, Weather,
+and Exchange Rate, three seeds, and DLinear. Each dataset is evaluated at
+\[
+(L,H)\in\{(168,24),(504,168),(504,504)\}.
+\]
+Every sampled date $t$ is the final observation: the model input is
+$X_t=(t-L,t]$ and its target is $Y_t=(t,t+H]$. Chronological splits own target
+dates, so the full horizon remains inside its split while the look-back may
+cross the preceding boundary. Consequently, changing $L$ does not change the
+validation or test target dates.
+Unless an experiment overrides it, users with accessible constant look-backs
+are dropped in training and evaluation, and training uses random window
+sampling, Adam with learning rate $10^{-5}$, batch size 256, 10,000 optimizer steps, and
+validation and logging every 1,000 steps. Each raw dataset also contributes its
+sibling \texttt{config.json}; portable, \texttt{timetensors}-scoped, and
+run-specific user exclusions are additive and are applied before the dynamic
+constant-user policy. An opt-in exhaustive profile uses
+\[
+\begin{aligned}
+(L,H)\in\{&(168,24),(168,168),(504,24),(504,168),\\
+          &(504,504),(720,168),(720,720)\},
+\end{aligned}
+\]
+five seeds, and DLinear plus PatchTST. A one-case test profile validates remote
+paths and artifacts. PatchTST is run after the DLinear study identifies the
+sampling, filtering, and normalization choices to carry forward.
+
+\section{Reference orders of error}
+
+After the filtering, sampling, and normalization controls, the reference
+benchmark compares persistence, a trained PatchTST, and frozen
+Chronos-2 under identical temporal splits and evaluation strides. PatchTST uses
+instance normalization, nMSE training, and removal of users with accessible
+constant windows; Chronos-2 uses its pretrained weights without optimization.
+This comparison establishes the scale of univariate errors before studying
+individual training choices.
+
+Every Slurm job exposes a boolean \texttt{TEST\_MODE}. Test mode narrows the
+shared dataset, setting, and seed axes to Electricity at $(168,24)$ and seed 1.
+Families that consume the shared model axis use DLinear; family-specific jobs
+retain their own narrow method list, so the reference check still covers
+persistence, PatchTST, and Chronos-2. It validates paths, configurations, and
+artifact generation before the methodology study.
+
+The numbered root-level \texttt{.slurm} files are scheduler fronts containing
+resource directives and the test/profile/run-mode switches. They delegate to
+the corresponding implementation shells under \texttt{src/slurm/}. All
+launchers explicitly request one Slurm task, timestamp configuration
+messages, and print every family-specific override that distinguishes a run.
+
+Each family launcher also exposes \texttt{RUN\_MODE=train},
+\texttt{RUN\_MODE=tables}, or the default \texttt{RUN\_MODE=both}. Large sweeps
+are submitted as train-only dataset or setting shards, followed by one
+\texttt{afterok}-dependent table-only job with the complete dataset, setting,
+model, and family-specific method overrides. The final job filters the requested
+dataset and setting axes and therefore combines the stable result directories
+without repeating training. Hydra metadata uses a path containing the family,
+dataset, setting, method, and Slurm job ID so parallel shards cannot collide.
+
+\section{Constant windows and individuals}
+
+This experiment separates two interventions.  Window filtering removes constant lookback windows from the sampler, while user filtering removes a user when an accessible lookback is constant or non-finite.  Each intervention is applied to training only, evaluation only, both, or neither.  Keeping train and evaluation controls independent distinguishes an optimization effect from a change in the evaluated population.
+
+\section{Sampling and batch size}
+
+The methodology study compares random sampling at batch sizes 64, 256, and
+1024 with individual sampling at batch size 256. The exhaustive profile crosses
+random, date-based, individual, and exhaustive sampling with all three batch
+sizes. This tests whether optimization is
+driven primarily by the number and diversity of sampled users, sampled dates,
+or exhaustive windows.
+
+\section{Loss functions}
+
+The loss sweep trains with MSE, MAE, normalized MSE, normalized MAE, and relative MSE.  Normalized losses divide errors by the lookback standard deviation.  Relative MSE divides predictions and targets by the absolute lookback mean before computing MSE.  Final tables report the same evaluation metric across training losses.
+
+\section{Normalization layers}
+
+The normalization sweep compares identity, global standardization, global min--max scaling, instance min--max scaling, instance normalization, and affine RevIN.  Global statistics are computed only from accessible training lookbacks.  This experiment is reported separately for DLinear and PatchTST.
+
+\section{Linear models}
+
+The linear comparison contains persistence, a learned linear head, periodic
+linear heads, and scikit-learn linear regression. Scikit-learn consumes all
+sampler-accessible windows deterministically. Learned coefficient plots are
+saved separately under identity, global-standard, and instance normalization.
+Since the purpose is a comparison between linear families rather than between
+DLinear and PatchTST backbones, all methods share one table.
+
+\section{Central and per-user forecasting}
+
+PatchTST and Chronos are compared under central and per-user operation.  A central model sees all training users; a per-user model is trained or invoked independently for each training user.  Chronos central inference enables cross-learning, whereas per-user inference disables it.  In test mode only PatchTST is run.
+
+Besides ordinary window-weighted MSE, this experiment reports equal-user MSE and the worst-user tail
+\[
+  \mathrm{W10}(\ell)=\frac{1}{\lceil 0.1U\rceil}
+  \sum_{u\in\operatorname{Top}_{\lceil0.1U\rceil}} \bar\ell_u,
+\]
+where $\bar\ell_u$ is the mean loss for user $u$.  The central/per-user comparison intentionally uses a combined table.
+
+\section{Seed aggregation and tables}
+
+Each method is stored below a \texttt{seed\_N} directory.  Table builders aggregate the mean and sample standard deviation across seeds.  A separate table is produced for each DLinear/PatchTST backbone except for the linear and central/per-user comparisons.  Every dataset--setting row displays an explicit multiplier $\times 10^m$ and cells are formatted as
+\[
+  x.yy\;\pm\;s.yy.
+\]
+The exponent is selected per row (or can be overridden explicitly), so magnitudes remain visible and values remain directly comparable within the row.
+
+\end{document}

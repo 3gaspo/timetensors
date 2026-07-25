@@ -1,529 +1,259 @@
-# timetensors
+# TimeTensors
 
-Time series forecasting experiments built around Hydra overrides, PyTorch
-models, tensorized datasets, and Slurm benchmark scripts.
+TimeTensors is a time-series forecasting benchmark focused on how experimental parameterization affects performance and convergence. It supports tensorized multivariate datasets, multiple sampling policies, constant-window filtering, PyTorch and scikit-learn models, normalization and loss variants, central/per-user training, seed aggregation, and publication-ready LaTeX tables.
 
-## Entrypoints
-
-Run commands from the repository root so relative paths resolve against this
-folder.
-
-```bash
-python -m timetensors.experiment  # dataset build, train, and eval orchestration
-python -m timetensors.load_dataset # build/load tensor dataset artifacts only
-python -m timetensors.train_model  # train only
-python -m timetensors.train_sklearn # fit/evaluate scikit-learn models
-python -m timetensors.eval_model   # evaluate only
-```
-
-Example:
-
-```bash
-python -m timetensors.experiment \
-  +data.raw_path="../datasets/electricity" \
-  +data.path="../datasets/electricity" \
-  +data.name=electricity \
-  +experiment.rebuild_dataset=true \
-  +task.lags=168 \
-  +task.horizon=24 \
-  +model.name=dlinear \
-  +model.path=dlinear \
-  +normalization.name=instance \
-  +training.batch_size=256 \
-  +training.epochs=200 \
-  +output.dir=outputs/results/electricity/168_24 \
-  +output.name=dlinear
-```
-
-## Config Reference
-
-Hydra is used with no config file by default, so most runs pass values as
-`+section.key=value` overrides. Nested dictionaries can be passed with dot
-paths, for example `+data.sampling.eval_stride=24`.
-
-The sections below document the canonical package specs.
-
-### `data`
-
-Dataset input/output and tensor-building options.
-
-| Key | Default | Description |
-| --- | --- | --- |
-| `data.path` | `run/dataset` | Directory containing tensor artifacts such as `values.pt`; also the output directory when rebuilding. |
-| `data.raw_path` | `.` | Directory containing `<data.name>.csv` when rebuilding. |
-| `data.name` | required for rebuild | CSV stem used as `<data.raw_path>/<data.name>.csv`. |
-| `data.prefix` | `""` | Prefix for tensor files, producing `<prefix>_values.pt`, etc. |
-| `data.legacy_context_kind` | unset | Interpret legacy `context.pt` as `individual` or `global`. |
-| `data.save_loaded_copy` | `false` | Re-save loaded tensors to `data.path`. |
-| `data.prepare_loaders` | `true` | Build train/eval loaders during dataset stage. |
-
-CSV-building options used only when `experiment.rebuild_dataset=true`:
-
-| Key | Default | Description |
-| --- | --- | --- |
-| `data.global_context_cols` | unset | CSV columns moved into global context. |
-| `data.drop_users` | unset | Series/columns to drop. |
-| `data.drop` | unset | Additional CSV columns or rows to drop. |
-| `data.build_individual_ids_context` | `false` | Add individual IDs as individual context. |
-| `data.rename_cols` | unset | Mapping of source column names to display names. |
-| `data.aggr` | unset | Resample aggregation: `sum`, `mean`, `last`, `first`, or `asfreq`. |
-| `data.aggr_period` | `h` | Pandas resampling period. |
-| `data.users_dim` | `1` | `1` means series are columns; `0` means series are rows. |
-| `data.date_col` | unset | CSV date column to parse and use as index. |
-| `data.dates` | unset | Explicit dates replacing the CSV index. |
-
-### `data.splits` or top-level `splits`
-
-Controls train/validation/test temporal and individual splits.
-
-| Key | Default | Description |
-| --- | --- | --- |
-| `date_splits` | `[0.6,0.2,0.2]` | Temporal split ratios; one to three positive values summing to 1. |
-| `indiv_split` | `1.0` | Fraction of individuals kept per split. |
-| `shuffle_individuals` | `true` | Randomize individual split membership. |
-| `by_cluster` | unset | Per-cluster overrides. |
-
-### `data.sampling` or top-level `sampling`
-
-Controls how dataset items are sampled from split tensors.
-
-| Key | Default | Description |
-| --- | --- | --- |
-| `train_idx_mode` | `individuals` | Train sampler mode. |
-| `eval_idx_mode` | `all` | Eval sampler mode. |
-| `train_stride` | `1` | Step between train candidate start dates. |
-| `eval_stride` | `1` | Step between eval candidate start dates. |
-| `shuffle_train` | `true` | Shuffle train loader. |
-| `shuffle_eval` | `false` | Shuffle eval loaders. |
-| `remove_train_cte` | `false` | Remove constant train windows. |
-| `remove_eval_cte` | `false` | Remove constant eval windows. |
-| `train_block_individuals` | `1` | Individuals returned in each train item. |
-| `eval_block_individuals` | `1` | Individuals returned in each eval item. |
-| `train_len_multiplier` | `1` | Multiplier for train sampler length. |
-| `eval_len_multiplier` | `1` | Multiplier for eval sampler length. |
-| `use_context` | `true` | Legacy switch for both context types. |
-| `use_individual_context` | `true` | Include individual context in batches. |
-| `use_global_context` | `true` | Include global context in batches. |
-
-Valid sampler modes are `random`, `dates`, `individuals`, and `all`.
-For `idx_mode=all`, the split dataset length is the number of accessible
-`(individual, date)` windows after stride and constant-window filtering. The
-dataloader length is the number of batches, i.e. `ceil(dataset_length /
-batch_size)`.
-
-### `data.subsets` or top-level `subsets`
-
-Optional subsampling on top of train/eval splits.
-
-| Key | Default | Description |
-| --- | --- | --- |
-| `mode` | sampler mode | Subset mode for all splits. |
-| `modes.<split>` | unset | Per-split subset mode. |
-| `sizes.<split>` | `1.0` | Ratio of candidates to keep for a split. |
-| `specs.<split>` | unset | Precomputed indices or `{mode, indices, stride}`. |
-| `by_cluster` | unset | Per-cluster overrides. |
-
-Valid subset modes are `dates`, `individuals`, and `all`.
-
-### `task`
-
-| Key | Default | Description |
-| --- | --- | --- |
-| `task.lags` | `168` | Lookback/context length. |
-| `task.horizon` | `24` | Forecast horizon. |
-
-### `training`
-
-| Key | Default | Description |
-| --- | --- | --- |
-| `training.batch_size` | `256` | Batch size. If it exceeds a split dataset length, PyTorch returns one smaller batch. |
-| `training.epochs` | `200` | Training epochs; `0` skips optimization but still saves/evaluates. |
-| `training.loss` | `nmse` | Training loss config. |
-| `training.complete_evaluation` | `true` | Include extra eval metrics beyond `mse` and `nmse`. |
-| `training.lr` | `1e-5` | Learning rate. |
-| `training.optimizer` | `adam` | Optimizer name. |
-| `training.optimizer_kwargs` | `{}` | Extra optimizer kwargs. |
-| `training.grad_clip` | unset | Max gradient norm. |
-| `training.log_every_steps` | `1000` | Log recent train loss every N optimizer steps. Also logs at step 1 and the final step. |
-| `training.eval_every_steps` | `100` | Run validation loaders every N optimizer steps. Also evaluates at step 1 and the final step. |
-| `training.device` | `auto` | Device selector: `auto`, `gpu`, `cuda`, or `cpu`. `gpu`/`cuda` fail if CUDA is unavailable; `auto` falls back to CPU. |
-| `training.eval_runs` | `1` | Validation passes during training. |
-| `training.pretrained_path` | unset | Model state dict path. |
-
-Optimizers: `adam`, `adamw`, `sgd`, `rmsprop`.
-
-During training, validation is run without resetting the seed so random
-training loaders keep their sequence between evaluation passes.
-
-Loss names: `mse`, `mae`, `nmse`, `nmae`, `rmse`.
-Loss dictionaries may use `name`, `base`, `scaling`, `reduction`, `eps`, and
-`kwargs`. Base losses are `mse` and `mae`; scalings are `normal` and
-`relative_mean`.
-
-### `model`
-
-| Key | Default | Description |
-| --- | --- | --- |
-| `model.name` | `model.path` or `linear` | Run/model name. |
-| `model.path` | `model.name` | Built-in model key, import path, `module:attr`, or `.py` file. |
-| `model.specs` | unset | Path to a model YAML file; bypasses inline model fields. |
-| `model.class` | unset | Class name when loading from a Python file. |
-| `model.kwargs` | `{}` | Constructor kwargs. |
-| `model.state_dict_path` | unset | State dict to load. |
-| `model.repeat_constant` | `false` | Repeat last value for constant lookbacks. |
-| `model.covariate_augmentation` | unset | Covariate augmentation config. |
-
-Built-in model keys:
-
-`persistence`, `expected`, `repeat`, `lookback`, `linear`,
-`periodic_linear`, `dlinear`, `patchtst`, `chronos`, `tabpfn`.
-
-Inline model kwargs automatically receive `lags`, `dim`, and `horizon` where
-needed.
-
-`periodic_linear` uses one linear head per forecast step. Zero-based horizon
-step `h` sees only lookback indexes with phase
-`(lags + forecast_offset + h) % period`; `cycles` optionally keeps only the
-last N matching indexes for each horizon step. With `lags=336`, `horizon=24`,
-and `period=168`, step 1 uses lookback indexes `[0,168]`, step 24 uses
-`[23,191]`.
-
-`sklinear` is trained with `python -m timetensors.train_sklearn` rather than
-the PyTorch optimizer path. It fits a multi-output `sklearn.linear_model.LinearRegression`
-from an unrolled loader and applies the same configured model normalization to
-inputs and targets before inverting predictions back to the original scale.
-
-### `sklearn`
-
-Options used by `python -m timetensors.train_sklearn`.
-
-| Key | Default | Description |
-| --- | --- | --- |
-| `sklearn.unroll_mode` | `accessible` | `accessible` deterministically scans all sampler-accessible windows; `loader` consumes the dataloader draw order. |
-| `sklearn.eval_unroll_mode` | `sklearn.unroll_mode` | Unroll mode for evaluation splits. |
-| `sklearn.max_windows` | unset | Optional cap on fitted train windows. |
-| `sklearn.eval_max_windows` | unset | Optional cap on evaluated windows per split. |
-| `sklearn.model_kwargs` | `{}` | Extra kwargs forwarded to `LinearRegression`. |
-
-Set `+experiment.plot_weights=true` to save `linear_weights.pt` and
-`linear_weights.pdf` for PyTorch linear models. The sklearn trainer saves these
-artifacts by default.
-
-Chronos and TabPFN use the normal `TimeTensorModel` path, including
-normalization, structured covariates, and constant-output handling. Their
-Python packages are installed with the project's standard dependencies.
-
-Useful SOTA kwargs:
-
-| Model | Kwarg | Meaning |
-| --- | --- | --- |
-| `chronos` | `weights_path` | Local Chronos-2 weights directory. Defaults to the shared `../weights/chronos2` directory. |
-| `chronos` | `cross_learning` | Forwarded to `pipeline.predict(...)`. |
-| `chronos` | `shared_context` | Treat context batches as shared across forecast samples. |
-| `chronos` | `device_map` | Chronos loading device map, usually `cuda` or `cpu`. |
-| `chronos` | `context_mode` | `structured`, `past_only`, or `future_included`. |
-| `tabpfn` | `weights_path` | Local TabPFN checkpoint path. Defaults to `../weights/tabpfnts/tabpfn-v2.5-regressor-v2.5_default.ckpt`. |
-| `tabpfn` | `cross_learning` | Fit one tabular regressor over the whole batch instead of one fit per sample. |
-| `tabpfn` | `dimension_encoding` | `ordinal` or `one-hot` series identity features. |
-| `tabpfn` | `context_as_features` | Use future-known covariates as tabular features instead of extra training rows. |
-| `tabpfn` | `use_time_features` | Add normalized time index and seasonal sine/cosine features. |
-| `tabpfn` | `context_mode` | `structured`, `past_only`, or `future_included`. |
-
-### `model.covariate_augmentation`
-
-| Key | Default | Description |
-| --- | --- | --- |
-| `modes` | none | Augmentation modes. A dash-separated string is accepted for simple transforms, or use a list of structured specs. |
-| `kwargs.target` | `past_only` | `past_only` appends generated covariates only over the lookback. `future_included` creates generated covariates over lookback plus horizon and splits them into past/future entries. |
-| `kwargs.noise_scale` | `1.0` | Scale for `noise` mode. |
-| `kwargs.constant_value` | `1.0` | Value for `constant` mode. |
-| `kwargs.kernel_size` | `5` | Odd smoothing kernel size for `kernel` mode. |
-| `kwargs.eps` | `1e-8` | Numerical epsilon. |
-
-Modes: `identity`, `square`, `root`, `sign`, `mirror`, `kernel`, `noise`,
-`constant`. For repeated noise or constant covariates with explicit values, use
-structured specs:
-
-```bash
-+model.covariate_augmentation.modes='[{name:noise,count:3,value:1.0,target:past_only}]'
-+model.covariate_augmentation.modes='[{name:constant,count:2,value:0.0,target:future_included}]'
-+model.covariate_augmentation.modes='[{name:noise,count:2,value:0.1,target:past_only},{name:constant,count:1,value:1.0,target:future_included}]'
-```
-
-Each spec accepts `name`, `count`, `value`, and optional `target`.
-`target` defaults to `model.covariate_augmentation.kwargs.target`.
-
-### `normalization`
-
-| Key | Default | Description |
-| --- | --- | --- |
-| `normalization.name` | `identity` | Normalization applied inside `TimeTensorModel`. |
-| `normalization.kwargs` | `{}` | Constructor kwargs for the normalization. |
-Canonical normalization names. Only these names are accepted:
-
-| Name | Meaning | Important kwargs |
-| --- | --- | --- |
-| `identity` | No normalization. | none |
-| `standard` | Global `(x - mean) / std`. | `mean`, `std`, `eps` |
-| `min-max` | Global min-max scaling. | `min_value`, `max_value`, `eps` |
-| `in-min-max` | Per-instance min-max scaling. | `eps`, `detach_stats` |
-| `instance` | RevIN with `affine=false`. Kept as a convenient name because it is a common baseline. | `eps`, `center`, `detach_stats`, `transform` |
-| `revin` | Reversible instance normalization. Variants such as last-value centering, arcsinh transform, and affine/no-affine are kwargs, not separate names. | `affine`, `center`, `transform`, `eps`, `detach_stats`, `dim` |
-| `grevin` | Generalized RevIN with learnable partial centering/scaling and output restoration. | `eps`, `center`, `start_in`, `tie_revin`, `personalize`, `n_clusters`, `init_from_stats`, `stats_split` |
-| `cmin` | Grevin preset with instance normalization frozen and output `alpha,beta` trainable. | `n_clusters`, `init_from_stats`, `stats_split` |
-| `previn` | Personalized RevIN preset with per-cluster affine parameters. | `n_clusters`, `unknown_cluster_id` |
-| `sigmoid` | Sigmoid transform with logit inverse. | `eps` |
-| `tanh` | Tanh transform with inverse hyperbolic tangent. | `eps` |
-| `relative_mean` | Scale by absolute instance mean. | `eps`, `detach_stats` |
-| `rms` | Scale by instance root-mean-square. | `eps`, `detach_stats` |
-
-RevIN examples:
-
-```bash
-+normalization.name=revin
-+normalization.kwargs.affine=false
-
-+normalization.name=revin
-+normalization.kwargs.center=last
-
-+normalization.name=revin
-+normalization.kwargs.transform=arcsinh
-```
-
-`arcsinh` means inverse hyperbolic sine. The code uses `torch.asinh`
-internally because that is PyTorch's function name, but the config spelling is
-`arcsinh`.
-
-Grevin stats initialization uses loader statistics from the selected split:
-
-```bash
-+normalization.name=cmin
-+normalization.kwargs.n_clusters=4
-+normalization.kwargs.init_from_stats=true
-```
-
-### `experiment`
-
-| Key | Default | Description |
-| --- | --- | --- |
-| `experiment.rebuild_dataset` | `false` | Build CSV/raw data into tensor artifacts before training/eval. |
-| `experiment.recompute_stats` | `true` | Compute and save final-loader numerical statistics such as average lookback mean/std and alpha/beta. |
-| `experiment.stats_max_windows` | unset | Optional maximum accessible windows to sample per loader for stats. Unset means all accessible windows. |
-| `experiment.stats_seed` | `experiment.seed` | RNG seed used only when `stats_max_windows` samples a subset. |
-| `experiment.stats_eps` | `1e-8` | Epsilon used in alpha/beta denominators. |
-| `experiment.prepare_loaders` | `data.prepare_loaders` or `true` | Build loaders during dataset stage. |
-| `experiment.evaluate` | `true` | Run evaluation after training/skipping training. |
-| `experiment.skip_training` | `false` | Skip training stage. |
-| `experiment.bypass_training_with_pretrained` | `true` | Skip training if pretrained state is supplied. |
-| `experiment.pretrained_path` | unset | State dict path. |
-| `experiment.seed` | unset | Random seed. |
-
-### `evaluation`
-
-| Key | Default | Description |
-| --- | --- | --- |
-| `evaluation.splits` | all loader splits | Split name or list of split names to evaluate. |
-| `evaluation.runs` | `1` | Repeated evaluation passes for final evaluation. |
-| `evaluation.plot_example` | `false` | Save an example prediction plot. |
-| `evaluation.example_plot_path` | `<run_dir>/example_prediction.pdf` | Optional path for the example prediction plot. |
-
-### `output`
-
-| Key | Default | Description |
-| --- | --- | --- |
-| `output.dir` | `outputs/results` | Parent model-result directory. |
-| `output.name` | `model.name` | Run directory name under `output.dir`. |
-
-The run directory is:
+## Layout
 
 ```text
-<output.dir>/<output.name>/
+src/
+  conf/       Hydra configuration
+  dataset/    CSV/tensor loading, splits, sampling, and statistics
+  models/     forecasting models and normalization layers
+  training/   losses, PyTorch/sklearn training, evaluation, per-user runs
+  scripts/    runnable Hydra entrypoints
+  slurm/      benchmark implementations (`.sh`)
+  visu/       plots, notebooks, dashboards, and result tables
+  tests/      lightweight smoke tests
+datasets/     remote dataset payloads
+weights/      remote pretrained weights
+outputs/      generated models, metrics, figures, and tables
+logs/         runtime and Slurm logs
+latex/        experiment protocol
+01_*.slurm ... 07_*.slurm   ordered submission files
 ```
 
-Saved artifacts include `model_state.pt`, `train_history.pt`,
-`train_metadata.pt`, `criterion_loss.pdf`, `all_losses.pt`,
-`per_user_all_losses.pt`, and optionally `example_prediction.pdf`.
+All Python commands below are run from the repository root with `PYTHONPATH=src`.
 
-### LaTeX result tables
-
-`timetensors.results_table` recursively reads an experiment tree laid out as
-`<root>/<dataset>/<L>_<H>/<method>/all_losses.pt` and writes a complete LaTeX
-table. The default metric is test-split MSE, values have two decimals, the best
-method in every row is bold, and every row displays its automatically selected
-power-of-ten scale. Improvements are relative to the first displayed method
-unless `--reference` is passed.
+## Entry points
 
 ```bash
-python -m timetensors.results_table outputs/results \
-  --split test1 --metric mse \
-  --datasets electricity,traffic \
-  --dataset-settings electricity=168_24,672_168 \
-  --dataset-settings traffic=168_24 \
-  --methods persistence,dlinear,patchtst \
-  --reference persistence --decimals 2
+python -m scripts.experiment       # dataset, training, and evaluation
+python -m scripts.load_dataset     # dataset stage only
+python -m scripts.train            # PyTorch training only
+python -m scripts.evaluate         # evaluation only
+python -m scripts.train_sklearn    # sklearn linear regression
+python -m visu.results_table outputs/results --show-std
 ```
 
-Useful switches are `--no-bold`, `--higher-is-better`,
-`--no-dataset-improvements`, `--no-setting-improvements`,
-`--no-overall-improvement`, `--no-auto-scale`, `--scale-exponent`, and repeatable
-`--row-scale DATASET/L_H=EXPONENT`. `--settings` applies one L-H subset globally;
-repeatable `--dataset-settings` overrides it for named datasets. The output
-defaults to `<root>/results_<metric>.tex`; use `--output`, `--caption`, and
-`--label` to customize it. The generated table uses the LaTeX `booktabs`,
-`multirow`, and `graphicx` packages.
-
-### `misc`
-
-| Key | Default | Description |
-| --- | --- | --- |
-| `misc.log_level` | `INFO` | Python logging level. |
-
-### Hydra
-
-Hydra's own job directory is separate from TimeTensor's `output.dir`. All entry
-points default to the following run directory (and use
-`outputs/hydra/multirun/` for sweeps):
+Hydra accepts the experiment sections `data`, `task`, `model`, `normalization`, `training`, `evaluation`, `experiment`, and `output`. A typical run is:
 
 ```bash
-hydra.run.dir='outputs/hydra/${now:%Y-%m-%d}/${now:%H-%M-%S}'
+python -m scripts.experiment \
+  +data.raw_path=datasets/electricity +data.path=datasets/electricity \
+  +data.name=electricity +task.lags=168 +task.horizon=24 \
+  +model.name=patchtst +model.path=patchtst \
+  +normalization.name=instance +training.loss=nmse \
+  +training.lr=1e-5 +training.batch_size=256 +training.epochs=10000 \
+  +training.valid_eval_freq=1000 +training.logging_eval_freq=1000 \
+  +experiment.seeds='[1,2,3]' \
+  +output.dir=outputs/results/electricity/168_24 +output.name=patchtst
 ```
 
-Use single quotes or escape the `$` in `${now:...}` when writing Bash/Slurm
-scripts, otherwise Bash tries to expand `now`.
+`experiment.seeds` creates `seed_N/` subdirectories. The first seed may rebuild the tensor dataset; later seeds reuse it. Training history stores raw optimizer-step losses, interval-average train losses, and validation losses at `training.valid_eval_freq`. Set `training.plot_step_train_loss=false` for the clearer interval-train/validation plot.
 
-## Dataset Layout
+## Experiment controls
 
-The Slurm scripts expect CSVs and built tensors in the same dataset directory:
+- Window anchor: every sampled date `t` is the last observed date, with
+  `X_t = X(t-L:t] = {x_(t-L+1), ..., x_t}` and
+  `Y_t = X(t:t+H] = {x_(t+1), ..., x_(t+H)}`. Date splits own target dates:
+  a full horizon must stay inside its split, while its lookback may cross the
+  preceding boundary. Evaluation target dates therefore do not move when `L`
+  changes. Batch metadata records `query_indices`/`query_ids`; the legacy
+  `date_indices`/`date_ids` keys are cutoff-date aliases.
+- Sampling modes: `random`, `dates`, `individuals`, and `all`; train and evaluation strides are independent.
+- Saved date/pair subset specifications carry `date_anchor=query_t`; legacy
+  start-index subset files are rejected and must be regenerated.
+- Constant handling: remove individual constant windows independently in train/evaluation, or drop users containing an accessible constant/non-finite lookback independently in train/evaluation.
+- Losses: `mse`, `mae`, `nmse`, `nmae`, and `relative_mse`.
+- Normalization: identity, global standard, global min-max, instance min-max, instance normalization/RevIN, and the research variants retained under `models/`.
+- Models: persistence and linear baselines, DLinear, PatchTST, Chronos, TabPFN, and sklearn linear regression.
+- Training scope: `experiment.training_scope=central` or `per_user`.
+- Per-user evaluation saves equal-user means and `w10_*`, the mean loss of the worst 10% of users.
 
-```text
-../datasets/
-  electricity/
-    electricity.csv
-    values.pt
-    datetimes.pt
-    individual_ids.pt
-    date_ids.pt
-    dataset_metadata.json
-```
+Global standard and min-max statistics are computed from accessible training
+lookbacks under the same cutoff and target-split rules. Final artifacts are
+written below `<output.dir>/<output.name>/`, including `model_state.pt`,
+`train_history.pt`, `criterion_loss.pdf`, `all_losses.pt`, and
+`per_user_all_losses.pt`.
 
-`experiment.rebuild_dataset=true` writes the tensor files into `data.path`.
-Set `REBUILD_DATASETS=false` for Slurm runs when tensors already exist.
+## Slurm benchmarks
 
-## Data Flow
+The jobs under `src/slurm/` cover:
 
-The pipeline keeps tensor build metadata separate from final-loader statistics.
-Metadata describes what was built or selected. Stats are numerical averages
-computed only after the final loaders exist.
+- a reference order-of-error comparison between persistence, PatchTST, and Chronos-2;
+- constant-window and constant-user removal;
+- sampling mode and batch size;
+- training losses, including relative MSE;
+- normalization methods, including global min-max;
+- linear and sklearn baselines;
+- central versus per-user PatchTST and Chronos with W10 metrics.
 
-```mermaid
-flowchart TD
-    A["Raw CSV in data.raw_path"] --> B{"experiment.rebuild_dataset"}
-    B -->|true| C["build_dataset: save values.pt, datetimes.pt, ids, dataset_metadata.json"]
-    B -->|false| D["load existing tensor artifacts from data.path"]
-    C --> D
-    D --> E["optional cluster assignment or selected cluster"]
-    E --> F["train/valid/test split"]
-    F --> G["optional subset per split or cluster"]
-    G --> H["TimeSeriesDataset with lags, horizon, stride, remove_cte, block_individuals"]
-    H --> I["TimeSeriesDataLoader"]
-    I --> J["metadata.json: shapes, modes, lengths, accessible windows"]
-    I --> K{"experiment.recompute_stats"}
-    K -->|true| L["stats.json: unroll accessible windows per loader"]
-    K -->|false| M["skip stats"]
-```
+Submit only the numbered `.slurm` files in the project root. Their names show
+the recommended order; they contain scheduler resources and the `TEST_MODE`,
+`BENCHMARK_PROFILE`, and `RUN_MODE` controls. The implementations remain under
+`src/slurm/`:
 
-Run-specific loader artifacts are saved under:
+- `01_constants.slurm` -> `benchmark_constants.sh` compares constant-window/user policies.
+- `02_sampling.slurm` -> `benchmark_sampling.sh` compares sampling modes and batch sizes.
+- `03_normalizations.slurm` -> `benchmark_normalizations.sh` compares normalization parameterizations.
+- `04_reference.slurm` -> `benchmark_reference.sh` establishes persistence, PatchTST, and Chronos-2
+  orders of error.
+- `05_losses.slurm` -> `benchmark_losses.sh` compares training losses under a fixed normalization.
+- `06_linear_models.slurm` -> `benchmark_linear_models.sh` compares trainable/closed-form linear models and
+  saves coefficient plots.
+- `07_central_per_user.slurm` -> `benchmark_central_per_user.sh` compares centralized and per-user training.
+- `benchmark_common.sh` resolves resources, applies the common split/stride and
+  training controls, launches exactly one Python task, and builds tables. It is
+  sourced by the family scripts and is not submitted directly.
 
-```text
-<output.dir>/<output.name>/dataset_artifacts/
-  metadata.json
-  stats.json
-```
+Each configuration log includes the full model-specific Hydra overrides, so
+otherwise similar rows can be distinguished without consulting the output
+directory.
 
-`metadata.json` is hierarchical. It records dataset shapes, cluster creation or
-loading, split creation or loading, subset/sampling modes, loader lengths,
-potential windows, accessible windows, and windows removed by `remove_cte`.
+The launchers have three profiles. `test` is the safe default and narrows the
+common axes to one Electricity/168--24/seed-1 path check; each family still
+runs its own narrow method list (for example, the reference job keeps
+persistence, PatchTST, and Chronos-2). It uses 20 optimizer steps with
+validation/logging every 10 steps. `study` is opt-in: six datasets, 168--24,
+504--168, and 504--504, seeds 1--3, and DLinear for families that use the
+shared model axis. `full` is also opt-in and restores seven settings, seeds
+1--5, and DLinear plus PatchTST where applicable. Study and full use 10,000
+optimizer steps with validation/logging every 1,000 steps. Every profile uses
+learning rate `1e-5`, batch size 256, random sampling, and evaluation stride
+equal to the horizon.
 
-`stats.json` is per final loader. A loader means the final combination of
-cluster, split, subset, and sampling spec. Stats therefore change when `lags`,
-`horizon`, subset, stride, split, cluster, or constant-window filtering changes.
-They do not depend on draw order. For example, a train loader with
-`train_idx_mode=individuals` and runtime length `1` still computes stats over all
-accessible `(individual, date)` windows unless `experiment.stats_max_windows`
-limits the scan.
-
-Stats currently include counts plus averaged lookback/future mean and std,
-`alpha = future_std / (lookback_std + eps)`, and
-`beta = (future_mean - lookback_mean) / (lookback_std + eps)`. If
-`experiment.stats_max_windows` is set, a reproducible random subset of
-accessible windows is used; otherwise the scan is deterministic and exhaustive.
-
-## Slurm Scripts
-
-Scripts live in `timetensors/slurm/` and define experiment launchers for Slurm
-clusters. They use these shell variables:
-
-| Variable | Default | Description |
-| --- | --- | --- |
-| `DATA_ROOT` | `../datasets` in scripts | Parent dataset directory. |
-| `OUT_ROOT` | per-script `outputs/...` | Parent output directory. |
-| `REBUILD_DATASETS` | `true` | Rebuild tensors for the first run of each dataset. |
-| `RECOMPUTE_STATS` | `true` | Recompute L/H-dependent stats for each run. |
-| `STATS_MAX_WINDOWS` | unset | Optional cap forwarded to `experiment.stats_max_windows`. |
-| `ELECTRICITY_DROP_USERS` | `57;106;127;182;298;6;113;143` | Electricity series dropped by Slurm launchers, matching the legacy config. |
-| `SEED` | `1` where used | Experiment seed. |
-| `SOTA_BATCH_SIZE` | `350` in SOTA scripts | Evaluation batch size for Chronos/TabPFN. |
-| `PATCHTST_BATCH_SIZE` | `256` | PatchTST batch size in `benchmark_sota_compare.slurm`. |
-| `PATCHTST_EPOCHS` | `200` | PatchTST training epochs in `benchmark_sota_compare.slurm`. |
-| `CHRONOS_WEIGHTS_PATH` | `../weights/chronos2` | Shared Chronos local weights directory. |
-| `CHRONOS_DEVICE_MAP` | `cuda` | Chronos loading device map. |
-| `TABPFN_WEIGHTS_PATH` | `../weights/tabpfnts/tabpfn-v2.5-regressor-v2.5_default.ckpt` | Shared TabPFN checkpoint path. |
-| `TABPFN_DEVICE` | `cuda` | TabPFN regressor device. |
-| `TRAIN_STRIDE` | `24` in `benchmark_linear_models.slurm` | Train stride for linear-model comparison. |
-| `EVAL_STRIDE` | `24` in `benchmark_linear_models.slurm` | Eval stride for linear-model comparison. |
-
-`benchmark_chronos_covariates.slurm` defines explicit augmentation specs in
-its `AUGMENTS` array, including mixed `past_only` and `future_included` runs.
-Every benchmark job runs `timetensors.results_table` once after its sweep and
-writes `results_mse.tex` under that job's `OUT_ROOT`.
-
-Submit from the repository root in a Slurm environment:
+Every benchmark job exposes the same quick check:
 
 ```bash
-sbatch timetensors/slurm/benchmark_models.slurm
-REBUILD_DATASETS=false sbatch timetensors/slurm/benchmark_models.slurm
-sbatch timetensors/slurm/benchmark_sota_compare.slurm
-sbatch timetensors/slurm/benchmark_chronos_covariates.slurm
-sbatch timetensors/slurm/benchmark_linear_models.slurm
+sbatch 05_losses.slurm
 ```
 
-## Smoke Tests
+`TEST_MODE=true` remains a compatibility switch that forces the test profile.
+Use `BENCHMARK_PROFILE=study`, then `BENCHMARK_PROFILE=full`, only after the
+test profile has completed. Every sweep can be narrowed without editing a launcher through
+`DATASETS_OVERRIDE`, `SETTINGS_OVERRIDE`, `SEEDS_OVERRIDE`, and
+`MODELS_OVERRIDE`; values are whitespace-separated. Family-specific overrides
+include `POLICIES_OVERRIDE`, `SAMPLING_CASES_OVERRIDE` (space-separated
+`mode:batch_size` pairs), `SAMPLING_MODES_OVERRIDE`,
+`BATCH_SIZES_OVERRIDE`, `LOSSES_OVERRIDE`, `NORMS_OVERRIDE`,
+`LINEAR_METHODS_OVERRIDE`, and `LINEAR_NORMS_OVERRIDE`.
 
-Lightweight component tests live in `tests/`. They exercise config defaults,
-synthetic dataloaders, and model construction.
+Every family also accepts `RUN_MODE=train`, `RUN_MODE=tables`, or the default
+`RUN_MODE=both`. Use `both` for a smoke test or a narrow job. For a study/full
+sweep, submit independent train-only dataset shards and one dependent table-only
+job over the complete intended axes. For example:
 
 ```bash
-python tests/test_config_defaults.py
-python tests/test_dataloaders.py
-python tests/test_models.py
-python tests/test_sklearn.py
+family=02_sampling.slurm
+profile=study
+datasets=(etth1 electricity traffic solar weather exchange_rate)
+settings="168:24 504:168 504:504"
+train_jobs=()
+
+for dataset in "${datasets[@]}"; do
+  train_jobs+=("$(BENCHMARK_PROFILE="$profile" RUN_MODE=train DATASETS_OVERRIDE="$dataset" \
+    SETTINGS_OVERRIDE="$settings" sbatch --parsable "$family")")
+done
+
+dependency="$(IFS=:; echo "${train_jobs[*]}")"
+BENCHMARK_PROFILE="$profile" RUN_MODE=tables DATASETS_OVERRIDE="${datasets[*]}" \
+  SETTINGS_OVERRIDE="$settings" \
+  sbatch --dependency="afterok:$dependency" "$family"
 ```
 
-These scripts build tiny synthetic tensors in temporary folders and avoid Slurm,
-large datasets, and long training runs.
+Repeat any family-specific method overrides on both the train and table jobs so
+the final method list matches the completed runs. Table mode filters both the
+dataset and setting axes and does not rerun training. Parallel jobs write Hydra
+metadata below a unique family/dataset/setting/method/Slurm-job path, while the
+actual models and metrics retain their stable publication paths.
 
-## Device Logging
+The recommended execution order is:
 
-The project pins `torch==2.5.1` to avoid resolving to newer CUDA 13-era Torch
-wheels that may require newer NVIDIA drivers than the cluster provides.
+1. Run one bare-launcher `test` path check.
+2. Run `BENCHMARK_PROFILE=study sbatch 01_constants.slurm`, then retain the
+   selected constant-user policy.
+3. Run `02_sampling.slurm` with `BENCHMARK_PROFILE=study` for random sampling at batch sizes 64/256/1024
+   and individual sampling at batch size 256.
+4. Run `03_normalizations.slurm` with `BENCHMARK_PROFILE=study`.
+5. Run `04_reference.slurm` with `BENCHMARK_PROFILE=study` for
+   persistence/PatchTST/Chronos-2 orders of error under the retained choices.
+6. Run `05_losses.slurm` with `BENCHMARK_PROFILE=study`.
+7. Run `06_linear_models.slurm`, followed by `07_central_per_user.slurm`, with
+   `BENCHMARK_PROFILE=study`.
 
-Training and evaluation log the selected device to stdout, which appears in
-`script_outputs/*.out` for Slurm jobs:
+The reference benchmark uses non-trainable persistence, instance-normalized
+nMSE PatchTST with constant users removed, and frozen Chronos-2. The linear
+benchmark plots learned coefficients separately for identity, global standard,
+and instance normalization. Its normalization list is configurable through
+`LINEAR_NORMS_OVERRIDE`. If the preceding controls select different choices,
+pass them through `REFERENCE_PATCHTST_NORM`, `REFERENCE_LOSS`,
+`REFERENCE_DROP_TRAIN_CONSTANT_USERS`, and
+`REFERENCE_DROP_EVAL_CONSTANT_USERS`.
 
-```text
-device requested=gpu resolved=cuda:0 cuda=True
+Dataset and weight roots are resolved in this order: an explicit `DATA_ROOT`
+or `WEIGHTS_ROOT`, a non-empty project-local directory, a non-empty parent
+directory, then one additional shared-parent candidate. When this repository
+is copied elsewhere, set the two environment variables explicitly.
+Set `REBUILD_DATASETS=true` only on the first job that prepares a clean dataset
+root; dependent jobs should reuse it rather than rebuilding concurrently.
+
+When tensors are rebuilt, `config.json` is discovered beside `data.raw_path`
+(whether that value is a dataset directory or a CSV). `data.config_path` may
+instead name an explicit JSON file or directory. Portable loading fields live at
+the top level and TimeTensors-only overrides under `timetensors`; scoped and
+run values override other fields, while every `drop_users` list is merged
+additively. The selected path and applied keys are timestamped in the job log.
+
+All non-filtering launchers default to dropping users with accessible constant
+look-backs in both training and evaluation. The shared
+`DROP_TRAIN_CONSTANT_USERS` and `DROP_EVAL_CONSTANT_USERS` overrides carry a
+different decision from `01_constants.slurm` into sampling,
+normalization, loss, linear, and central/per-user studies. The reference job
+uses the corresponding `REFERENCE_DROP_*` overrides listed above.
+
+Study-profile benchmark tables are emitted once per selected model. The
+linear-model and reference comparisons intentionally use combined tables.
+
+Tables aggregate seed means and standard deviations, display values with two decimals, and include an explicit per-row `\times 10^{m}` multiplier. See `latex/benchmark_experiments.tex` for the complete protocol.
+
+All benchmark launchers use the `a100` partition, one CPU per task, concise
+one-word job names, and `logs/%x_%j.{out,err}` for Slurm output. Hydra logs to
+stdout only so the Slurm files remain the canonical run logs. Study and full
+profiles remain sequential within one allocation; use the train/table workflow
+above whenever a complete family cannot fit one allocation.
+
+## Lightweight checks
+
+With the project environment prepared:
+
+```bash
+python src/tests/test_config_defaults.py
+python src/tests/test_dataloaders.py
+python src/tests/test_models.py
+python src/tests/test_results_table.py
+python src/tests/test_sklearn.py
 ```
 
-If `resolved=cpu` or `cuda_available=False`, PyTorch did not find a usable GPU
-inside that job. Slurm scripts pass `+training.device=gpu`, so CUDA problems
-fail fast with diagnostics instead of silently training on CPU.
+## Synthetic smoke benchmark
+
+`src/scripts/synthetic_smoke.py` loads the generator definitions and the
+two-cluster population from `archive/synthetic_generator.ipynb`, writes a small
+16-user dataset to `datasets/synthetic_smoke/`, and exercises all six benchmark
+families with a NumPy linear forecaster for six epochs and seeds 1 and 2. It is
+dependency-light and is intended for local end-to-end checks when the PyTorch
+`uv` environment is unavailable.
+
+```bash
+python src/scripts/synthetic_smoke.py
+```
+
+Seed-level results, aggregated CSV/Markdown/LaTeX tables, training history, and
+SVG plots are written to `outputs/synthetic_smoke/`. This smoke runner validates
+the experiment controls and reporting path; the Slurm benchmarks remain the
+authoritative DLinear/PatchTST experiments.
+
+## Experiment guides
+
+Concise one-page theoretical and implementation notes for all seven benchmark
+families are under `latex/experiment_guides/`. Compiled versions are written to
+the same directory beside their `.tex` sources, with copies in `outputs/pdf/`.
