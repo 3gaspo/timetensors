@@ -1,7 +1,6 @@
 #!/bin/bash
 # Establish persistence, PatchTST, and Chronos-2 error references.
 set -euo pipefail
-TEST_MODE="${TEST_MODE:-false}"
 source "$(dirname "${BASH_SOURCE[0]}")/benchmark_common.sh"
 OUT_ROOT="$ROOT/outputs/reference"
 read -ra REFERENCE_METHODS <<< "${REFERENCE_METHODS_OVERRIDE:-persistence patchtst chronos2}"
@@ -11,7 +10,7 @@ REFERENCE_DROP_TRAIN_CONSTANT_USERS="${REFERENCE_DROP_TRAIN_CONSTANT_USERS:-true
 REFERENCE_DROP_EVAL_CONSTANT_USERS="${REFERENCE_DROP_EVAL_CONSTANT_USERS:-true}"
 CHRONOS_WEIGHTS_PATH="$(resolve_weight_path chronos2)"
 
-if [ "$RUN_MODE" != tables ]; then
+run_training() {
   for dataset in "${DATASETS[@]}"; do
     for setting in "${SETTINGS[@]}"; do
       for method in "${REFERENCE_METHODS[@]}"; do
@@ -46,10 +45,21 @@ if [ "$RUN_MODE" != tables ]; then
       done
     done
   done
-fi
+}
 
-if [ "$RUN_MODE" != train ]; then
+run_tables() {
   METHOD_ARG="$(IFS=,; echo "${REFERENCE_METHODS[*]}")"
   write_table combined mse "$METHOD_ARG"
   write_table combined w10_mse "$METHOD_ARG"
-fi
+}
+
+WORKFLOW_STATE_DIR="$OUT_ROOT/.workflow"
+TABLE_INPUT_NAME=run.complete
+TABLE_STAGE_SIGNATURE="v1|family=reference|mode=$EXPERIMENT_MODE|datasets=$DATASETS_CSV|settings=$SETTINGS_CSV|seeds=$SEEDS_CSV|methods=${REFERENCE_METHODS[*]}|patchtst_norm=$REFERENCE_PATCHTST_NORM|loss=$REFERENCE_LOSS|drop_train_constant_users=$REFERENCE_DROP_TRAIN_CONSTANT_USERS|drop_eval_constant_users=$REFERENCE_DROP_EVAL_CONSTANT_USERS"
+TRAIN_STAGE_SIGNATURE="$TABLE_STAGE_SIGNATURE|$COMMON_TRAIN_SIGNATURE"
+TABLE_REQUIRED_OUTPUTS=("$OUT_ROOT/results_combined_mse.tex" "$OUT_ROOT/results_combined_w10_mse.tex")
+TABLE_EXPECTED_METHODS=("${REFERENCE_METHODS[@]}")
+log_section "workflow start family=reference mode=$EXPERIMENT_MODE stages=$STAGES_SPEC"
+source "$ROOT/src/slurm/stage_train.sh"
+source "$ROOT/src/slurm/stage_tables.sh"
+log_section "workflow done family=reference output=$OUT_ROOT"

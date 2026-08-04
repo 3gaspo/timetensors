@@ -10,11 +10,10 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=64G
 
-# Submit from the project root; implementation: src/slurm/benchmark_linear_models.sh.
-TEST_MODE="${TEST_MODE:-false}"
-BENCHMARK_PROFILE="${BENCHMARK_PROFILE:-test}"
-RUN_MODE="${RUN_MODE:-both}"
+# Complete resumable workflow; implementation: src/slurm/benchmark_linear_models.sh.
+EXPERIMENT_MODE="${EXPERIMENT_MODE:-test}"
+STAGES="${STAGES:-train,tables}"
 PROJECT_ROOT="${SLURM_SUBMIT_DIR:-$(pwd)}"
 cd "$PROJECT_ROOT"
-export PROJECT_ROOT TEST_MODE BENCHMARK_PROFILE RUN_MODE
+export PROJECT_ROOT EXPERIMENT_MODE STAGES
 source "$PROJECT_ROOT/src/slurm/benchmark_linear_models.sh"

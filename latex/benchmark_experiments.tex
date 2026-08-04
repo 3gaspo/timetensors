@@ -1,124 +1,480 @@
 \documentclass[10pt]{article}
-\usepackage[a4paper,margin=2cm]{geometry}
-\usepackage{booktabs}
-\usepackage{amsmath}
-\usepackage{hyperref}
 
-\title{TimeTensors Benchmark Protocol}
-\author{}
-\date{}
+\usepackage[a4paper,margin=18mm,headheight=14pt]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb,mathtools,bm}
+\usepackage{booktabs,tabularx,array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage[
+  colorlinks=true,
+  linkcolor=blue!45!black,
+  urlcolor=blue!45!black
+]{hyperref}
+\usepackage[capitalise,nameinlink,noabbrev]{cleveref}
+\usepackage{fancyhdr}
+
+\definecolor{maincolor}{HTML}{17365D}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.45\baselineskip}
+\setlist{nosep,leftmargin=*}
+\setcounter{secnumdepth}{2}
+\setcounter{tocdepth}{1}
+\renewcommand{\arraystretch}{1.12}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small TimeTensors forecasting benchmark}
+\fancyhead[R]{\small Gaspard Berthelier}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.35pt}
+\fancypagestyle{plain}{%
+  \fancyhf{}
+  \fancyhead[L]{\small TimeTensors forecasting benchmark}
+  \fancyhead[R]{\small Gaspard Berthelier}
+  \fancyfoot[C]{\thepage}
+  \renewcommand{\headrulewidth}{0.35pt}%
+}
+\hypersetup{
+  pdftitle={TimeTensors: Forecasting Benchmark and Experiments},
+  pdfauthor={Gaspard Berthelier}
+}
+
+\newcommand{\reals}{\mathbb{R}}
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\MSE}{\operatorname{MSE}}
+\newcommand{\MAE}{\operatorname{MAE}}
+\newcommand{\nMSE}{\operatorname{nMSE}}
+\newcommand{\nMAE}{\operatorname{nMAE}}
+\newcommand{\rMSE}{\operatorname{rMSE}}
+\newcommand{\Wten}{\operatorname{W10}}
+
+\title{\vspace{-1.5em}\textbf{TimeTensors: Forecasting Benchmark and Experiments}\vspace{-0.4em}}
+\author{Gaspard Berthelier}
+\date{4 August 2026}
 
 \begin{document}
 \maketitle
+\thispagestyle{empty}
 
-\section{Common protocol}
+\begin{abstract}
+TimeTensors studies how data selection, sampling, normalization, optimization
+loss, model class, and training scope affect time-series forecasts. This
+document defines the forecasting task, the seven implemented experiment
+families, and the exact common protocol used by their launchers.
+\end{abstract}
 
-The default methodology study uses ETTh1, Electricity, Traffic, Solar, Weather,
-and Exchange Rate, three seeds, and DLinear. Each dataset is evaluated at
+\tableofcontents
+
+\section{Time-series forecasting task}
+\label{sec:task}
+
+Let $\mathcal U=\{0,\ldots,U-1\}$ index series (called \emph{users} in the
+code), let $d\in\{1,\ldots,D\}$ index variables within a series, and let
+$t\in\{0,\ldots,T-1\}$ index ordered dates. The complete panel is
 \[
-(L,H)\in\{(168,24),(504,168),(504,504)\}.
+  Z=(z_{u,d,t})\in\reals^{U\times D\times T}.
 \]
-Every sampled date $t$ is the final observation: the model input is
-$X_t=(t-L,t]$ and its target is $Y_t=(t,t+H]$. Chronological splits own target
-dates, so the full horizon remains inside its split while the look-back may
-cross the preceding boundary. Consequently, changing $L$ does not change the
-validation or test target dates.
-Unless an experiment overrides it, users with accessible constant look-backs
-are dropped in training and evaluation, and training uses random window
-sampling, Adam with learning rate $10^{-5}$, batch size 256, 10,000 optimizer steps, and
-validation and logging every 1,000 steps. Each raw dataset also contributes its
-sibling \texttt{config.json}; portable, \texttt{timetensors}-scoped, and
-run-specific user exclusions are additive and are applied before the dynamic
-constant-user policy. An opt-in exhaustive profile uses
+The benchmark CSV loader treats each non-date column as one series, hence all
+publication datasets use $D=1$; the implementation nevertheless retains the
+general $D$-variate tensor contract.
+
+Fix a lookback length $L\geq1$ and a forecast horizon $H\geq1$. A query date
+$t$ is the last observed date. Its input and target are
+\begin{align}
+  X_{t,u}
+  &=Z_{u,:,\,(t-L,t]}
+    =(z_{u,:,t-L+1},\ldots,z_{u,:,t})\in\reals^{D\times L},\\
+  Y_{t,u}
+  &=Z_{u,:,\,(t,t+H]}
+    =(z_{u,:,t+1},\ldots,z_{u,:,t+H})\in\reals^{D\times H}.
+\end{align}
+Thus $L$ is the number of available past values and $H$ the number of future
+values predicted at once. A forecasting model is a map
 \[
-\begin{aligned}
-(L,H)\in\{&(168,24),(168,168),(504,24),(504,168),\\
-          &(504,504),(720,168),(720,720)\},
-\end{aligned}
+  F_\theta:\reals^{D\times L}\longrightarrow\reals^{D\times H},
+  \qquad \widehat Y_{t,u}=F_\theta(X_{t,u}),
 \]
-five seeds, and DLinear plus PatchTST. A one-case test profile validates remote
-paths and artifacts. PatchTST is run after the DLinear study identifies the
-sampling, filtering, and normalization choices to carry forward.
+where $\theta$ contains trainable parameters for learned models and is empty or
+frozen for persistence and Chronos-2.
 
-\section{Reference orders of error}
-
-After the filtering, sampling, and normalization controls, the reference
-benchmark compares persistence, a trained PatchTST, and frozen
-Chronos-2 under identical temporal splits and evaluation strides. PatchTST uses
-instance normalization, nMSE training, and removal of users with accessible
-constant windows; Chronos-2 uses its pretrained weights without optimization.
-This comparison establishes the scale of univariate errors before studying
-individual training choices.
-
-Every Slurm job exposes a boolean \texttt{TEST\_MODE}. Test mode narrows the
-shared dataset, setting, and seed axes to Electricity at $(168,24)$ and seed 1.
-Families that consume the shared model axis use DLinear; family-specific jobs
-retain their own narrow method list, so the reference check still covers
-persistence, PatchTST, and Chronos-2. It validates paths, configurations, and
-artifact generation before the methodology study.
-
-The numbered root-level \texttt{.slurm} files are scheduler fronts containing
-resource directives and the test/profile/run-mode switches. They delegate to
-the corresponding implementation shells under \texttt{src/slurm/}. All
-launchers explicitly request one Slurm task, timestamp configuration
-messages, and print every family-specific override that distinguishes a run.
-
-Each family launcher also exposes \texttt{RUN\_MODE=train},
-\texttt{RUN\_MODE=tables}, or the default \texttt{RUN\_MODE=both}. Large sweeps
-are submitted as train-only dataset or setting shards, followed by one
-\texttt{afterok}-dependent table-only job with the complete dataset, setting,
-model, and family-specific method overrides. The final job filters the requested
-dataset and setting axes and therefore combines the stable result directories
-without repeating training. Hydra metadata uses a path containing the family,
-dataset, setting, method, and Slurm job ID so parallel shards cannot collide.
-
-\section{Constant windows and individuals}
-
-This experiment separates two interventions.  Window filtering removes constant lookback windows from the sampler, while user filtering removes a user when an accessible lookback is constant or non-finite.  Each intervention is applied to training only, evaluation only, both, or neither.  Keeping train and evaluation controls independent distinguishes an optimization effect from a change in the evaluated population.
-
-\section{Sampling and batch size}
-
-The methodology study compares random sampling at batch sizes 64, 256, and
-1024 with individual sampling at batch size 256. The exhaustive profile crosses
-random, date-based, individual, and exhaustive sampling with all three batch
-sizes. This tests whether optimization is
-driven primarily by the number and diversity of sampled users, sampled dates,
-or exhaustive windows.
-
-\section{Loss functions}
-
-The loss sweep trains with MSE, MAE, normalized MSE, normalized MAE, and relative MSE.  Normalized losses divide errors by the lookback standard deviation.  Relative MSE divides predictions and targets by the absolute lookback mean before computing MSE.  Final tables report the same evaluation metric across training losses.
-
-\section{Normalization layers}
-
-The normalization sweep compares identity, global standardization, global min--max scaling, instance min--max scaling, instance normalization, and affine RevIN.  Global statistics are computed only from accessible training lookbacks.  This experiment is reported separately for DLinear and PatchTST.
-
-\section{Linear models}
-
-The linear comparison contains persistence, a learned linear head, periodic
-linear heads, and scikit-learn linear regression. Scikit-learn consumes all
-sampler-accessible windows deterministically. Learned coefficient plots are
-saved separately under identity, global-standard, and instance normalization.
-Since the purpose is a comparison between linear families rather than between
-DLinear and PatchTST backbones, all methods share one table.
-
-\section{Central and per-user forecasting}
-
-PatchTST and Chronos are compared under central and per-user operation.  A central model sees all training users; a per-user model is trained or invoked independently for each training user.  Chronos central inference enables cross-learning, whereas per-user inference disables it.  In test mode only PatchTST is run.
-
-Besides ordinary window-weighted MSE, this experiment reports equal-user MSE and the worst-user tail
+The dates are split chronologically into target-date blocks
+$S_{\mathrm{tr}},S_{\mathrm{va}},S_{\mathrm{te}}$ in proportions
+$0.6/0.2/0.2$. For any block $S$, the admissible queries are
 \[
-  \mathrm{W10}(\ell)=\frac{1}{\lceil 0.1U\rceil}
-  \sum_{u\in\operatorname{Top}_{\lceil0.1U\rceil}} \bar\ell_u,
+  \mathcal T(S)=\{t:L-1\leq t\leq T-H-1,
+  \ \{t+1,\ldots,t+H\}\subseteq S\}.
 \]
-where $\bar\ell_u$ is the mean loss for user $u$.  The central/per-user comparison intentionally uses a combined table.
+The full target therefore belongs to its split, while the lookback may cross
+the preceding split boundary. In particular, changing $L$ does not change the
+validation or test target dates. The default training and evaluation pair sets
+are $\mathcal A_S=\mathcal U\times\mathcal T(S)$, before the filters and strides
+defined below.
 
-\section{Seed aggregation and tables}
-
-Each method is stored below a \texttt{seed\_N} directory.  Table builders aggregate the mean and sample standard deviation across seeds.  A separate table is produced for each DLinear/PatchTST backbone except for the linear and central/per-user comparisons.  Every dataset--setting row displays an explicit multiplier $\times 10^m$ and cells are formatted as
+For a lookback $X$, statistics are computed independently along its time axis:
 \[
-  x.yy\;\pm\;s.yy.
+  \mu_X=\frac1L\sum_{\ell=1}^{L}X_{:,\ell},\qquad
+  \sigma_X=\left(\frac1L\sum_{\ell=1}^{L}
+  (X_{:,\ell}-\mu_X)^2\right)^{1/2},\qquad \varepsilon=10^{-8}.
 \]
-The exponent is selected per row (or can be overridden explicitly), so magnitudes remain visible and values remain directly comparable within the row.
+The population standard deviation is used. Model normalization is inverted
+before the loss is evaluated, so predictions and targets passed to every loss
+are in the original data space.
+
+\section{Experiment 1: constant windows and users}
+\label{sec:constants}
+
+For the univariate benchmark, an accessible pair $(u,t)$ is valid when its
+lookback is finite and non-constant:
+\[
+  a_{u,t}=\bm 1\!\left[
+  X_{t,u}\text{ is finite and }\sigma_{X_{t,u}}>0
+  \right].
+\]
+Window filtering removes only pairs for which $a_{u,t}=0$. User filtering is
+more restrictive: for split $S$ it retains
+\[
+  \mathcal U_{S}^{\mathrm{safe}}
+  =\{u\in\mathcal U:a_{u,t}=1\ \text{for every }t\in\mathcal T(S)\}.
+\]
+In the general $D$-variate implementation, window filtering accepts a
+user--date pair if at least one variable is finite and non-constant, whereas
+user filtering drops a user if any accessible variable-window is constant or
+non-finite. These definitions coincide for the $D=1$ benchmark tensors.
+
+The launcher compares exactly seven policies: keep all pairs;
+\code{remove_train_windows}, \code{remove_eval_windows}, or
+\code{remove_all_windows}; and \code{drop_train_users},
+\code{drop_eval_users}, or \code{drop_all_users}. Train and evaluation
+interventions are deliberately separated: train-only filtering tests an
+optimization effect, whereas evaluation filtering changes the measured
+population. Curated source exclusions from each dataset's \code{config.json}
+are applied before these dynamic policies and are not an experimental factor.
+
+The family uses instance-normalized PatchTST in the full profile and adds
+DLinear in ultra. Its MSE tables should be interpreted with the retained
+numbers of users and windows, since lower error after evaluation filtering is
+not by itself evidence of a better forecaster.
+
+\section{Experiment 2: sampling and batch size}
+\label{sec:sampling}
+
+The sampler controls which accessible pairs form optimizer batches. With the
+current default of one user per dataset item, its four modes are:
+\begin{itemize}
+  \item \code{random}: the single dataset item draws a query date and then one
+    user uniformly at random;
+  \item \code{dates}: item $i$ fixes the $i$th accessible date and draws one
+    user at random;
+  \item \code{individuals}: item $i$ fixes user $i$ and draws one accessible
+    date at random;
+  \item \code{all}: items deterministically enumerate every accessible
+    $(u,t)$ pair in date-major order.
+\end{itemize}
+After filtering, let $N_m$ be the dataset length in mode $m$. Ignoring removed
+pairs,
+\[
+  N_{\mathrm{random}}=1,\qquad
+  N_{\mathrm{dates}}=|\mathcal T(S_{\mathrm{tr}})|,\qquad
+  N_{\mathrm{individuals}}=U,\qquad
+  N_{\mathrm{all}}=|\mathcal A_{S_{\mathrm{tr}}}|.
+\]
+For nominal batch size $B$ and configured epoch count $E$, the current training
+loop performs
+\[
+  K_m=E\left\lceil\frac{N_m}{B}\right\rceil
+\]
+optimizer steps. Consequently, the full-profile value $E=10{,}000$ is exactly
+10,000 optimizer steps only in random mode; the modes do not share a fixed
+update budget. Moreover, random mode returns one actual window per batch with
+the current dataset length, irrespective of nominal $B$. This behavior is part
+of the present implementation and must be accounted for when interpreting the
+batch-size sweep.
+
+Full and ultra cross the four modes with $B\in\{64,256,1024\}$. Evaluation is
+held to exhaustive pair enumeration with stride $H$; changing $B$ changes its
+batching but not its query set or metric. The model uses instance normalization,
+and the shared model axis is PatchTST in full and PatchTST plus DLinear in ultra.
+
+\section{Experiment 3: normalization layers}
+\label{sec:normalization}
+
+The wrapper applies an invertible normalization $N$ before the base forecaster
+$f_\theta$ and restores its output afterward:
+\[
+  \widehat Y=N^{-1}\!\left(f_\theta(N(X))\right).
+\]
+Let $(\mu_0,\sigma_0,a_0,b_0)$ be the scalar mean, standard deviation,
+minimum, and maximum computed over all accessible training lookbacks. Let
+$a_X=\min_\ell X_{:,\ell}$ and $b_X=\max_\ell X_{:,\ell}$. The sweep compares:
+\begin{align*}
+  N_{\mathrm{id}}(X)&=X,\\
+  N_{\mathrm{std}}(X)&=\frac{X-\mu_0}{\sigma_0+\varepsilon},
+  &N_{\mathrm{std}}^{-1}(Q)&=Q(\sigma_0+\varepsilon)+\mu_0,\\
+  N_{\mathrm{mm}}(X)&=\frac{X-a_0}{b_0-a_0+\varepsilon},
+  &N_{\mathrm{mm}}^{-1}(Q)&=Q(b_0-a_0+\varepsilon)+a_0,\\
+  N_{\mathrm{imm},X}(X)&=\frac{X-a_X}{b_X-a_X+\varepsilon},
+  &N_{\mathrm{imm},X}^{-1}(Q)&=Q(b_X-a_X+\varepsilon)+a_X,\\
+  N_{\mathrm{inst},X}(X)&=\frac{X-\mu_X}{\sigma_X+\varepsilon},
+  &N_{\mathrm{inst},X}^{-1}(Q)&=Q(\sigma_X+\varepsilon)+\mu_X.
+\end{align*}
+The code names are respectively \code{identity}, \code{standard},
+\code{min-max}, \code{in-min-max}, and \code{instance}. The sixth method,
+\code{revin}, adds one learnable scale and bias per variable:
+\[
+  N_{\mathrm{RevIN},X}(X)
+  =\gamma\odot N_{\mathrm{inst},X}(X)+\beta,
+  \quad
+  N_{\mathrm{RevIN},X}^{-1}(Q)
+  =\frac{Q-\beta}{\gamma+\varepsilon}
+   (\sigma_X+\varepsilon)+\mu_X.
+\]
+Thus \code{instance} and \code{revin} use the same
+\code{RevINNormalization} class, with affine parameters disabled and enabled,
+respectively. All instance statistics are detached and cached from the current
+lookback. The experiment fixes the training loss to nMSE and reports
+inverse-transformed test MSE separately for each shared backbone.
+
+\section{Experiment 4: reference orders of error}
+\label{sec:reference}
+
+This experiment establishes the error scale before architecture-specific
+ablations. It compares three qualitatively different forecasters under the same
+split and evaluation queries:
+\begin{align*}
+  \widehat Y^{\mathrm{pers}}_{t,u,:,h}&=X_{t,u,: ,L},
+  &&h=1,\ldots,H,\\
+  \widehat Y^{\mathrm{PatchTST}}_{t,u}&=F_{\widehat\theta}(X_{t,u}),\\
+  \widehat Y^{\mathrm{Chronos}}_{t,u}&=F_{\theta_0}^{\mathrm{median}}(X_{t,u}).
+\end{align*}
+Persistence has no trainable parameters. PatchTST is trained from scratch with
+instance normalization and nMSE. Chronos-2 is loaded from the local checkpoint,
+kept frozen, uses identity normalization and no cross-learning, and returns the
+median forecast quantile. Users with an accessible constant lookback are
+dropped in both training and evaluation by default.
+
+The family writes a combined test MSE table and a combined worst-user-decile
+MSE table. The comparison is an order-of-error reference, not a claim that the
+three methods have equal training data or compute.
+
+\section{Experiment 5: training losses}
+\label{sec:losses}
+
+For one prediction, let $Q=DH$ and let $j$ index its $D\times H$ elements. The
+five implemented training objectives are
+\begin{align}
+  \MSE(\widehat Y,Y)
+  &=\frac1Q\sum_{j=1}^{Q}(\widehat Y_j-Y_j)^2,\\
+  \MAE(\widehat Y,Y)
+  &=\frac1Q\sum_{j=1}^{Q}|\widehat Y_j-Y_j|,\\
+  \nMSE(\widehat Y,Y\mid X)
+  &=\frac1Q\sum_{j=1}^{Q}
+    \left(\frac{\widehat Y_j-Y_j}{\sigma_X+\varepsilon}\right)^2,\\
+  \nMAE(\widehat Y,Y\mid X)
+  &=\frac1Q\sum_{j=1}^{Q}
+    \frac{|\widehat Y_j-Y_j|}{\sigma_X+\varepsilon},\\
+  \rMSE(\widehat Y,Y\mid X)
+  &=\frac1Q\sum_{j=1}^{Q}
+    \left(\frac{\widehat Y_j-Y_j}{|\mu_X|+\varepsilon}\right)^2.
+\end{align}
+The scales broadcast from each sample and variable over its horizon. The code
+name for the last objective is \code{relative_mse}. Because scaling is applied
+to prediction and target before the base MSE/MAE, these equations match the
+implementation exactly.
+
+The sweep holds instance normalization fixed and changes only the training
+criterion. Its tables compare every run using data-space test MSE, so training
+curve magnitudes from different objectives are not directly comparable.
+Complete run artifacts additionally retain MSE, nMSE, MAE, nMAE, relative MSE,
+and per-user losses.
+
+\section{Experiment 6: linear models}
+\label{sec:linear}
+
+Linear controls test how much performance follows from autoregressive structure
+alone. The unrestricted trainable model is
+\[
+  \operatorname{vec}(\widehat Y)
+  =W\operatorname{vec}(X)+b,
+  \qquad W\in\reals^{DH\times DL},\quad b\in\reals^{DH}.
+\]
+The periodic model uses period $p=\min(L,168)$. With zero-based lag and horizon
+indices, define
+\[
+  I_h=\{\ell\in\{0,\ldots,L-1\}:\ell\bmod p=(L+h)\bmod p\}.
+\]
+It fits one head per horizon,
+\[
+  \widehat Y_{:,h}=W_h\operatorname{vec}(X_{:,I_h})+b_h,
+  \qquad h=0,\ldots,H-1,
+\]
+so each forecast step sees only past positions of the same phase. No limit is
+placed on the number of previous cycles.
+
+The \code{linear} and \code{periodic_linear} models are optimized by the common
+PyTorch training loop. \code{sklinear} instead deterministically unrolls every
+sampler-accessible training pair and fits scikit-learn multi-output ordinary
+least squares with an intercept. Persistence is included as a parameter-free
+reference. Each fitted linear method is evaluated with \code{identity},
+\code{standard}, and non-affine \code{instance} normalization; the launcher
+also saves its coefficient tensor and plots. The test profile narrows this to
+\code{linear} and \code{sklinear} with instance normalization. All methods
+share one MSE table.
+
+\section{Experiment 7: central and per-user forecasting}
+\label{sec:scope}
+
+A central model fits one parameter vector using all training users. Per-user
+training creates an independent model and output directory for each user in the
+training split, restricts every available split to that user, and then merges
+the resulting losses. For PatchTST this compares shared training with
+specialization. For frozen Chronos-2, ultra mode instead compares central
+inference with \code{cross_learning=true} against separate per-user inference
+with \code{cross_learning=false}.
+
+Let $n_u$ be the number of evaluated scalar errors for user $u$ and let
+$\ell_{u,i}$ denote one such error. Define
+\[
+  \overline\ell_u=\frac1{n_u}\sum_{i=1}^{n_u}\ell_{u,i},\qquad
+  M_{\mathrm{elem}}=\frac{\sum_u\sum_i\ell_{u,i}}{\sum_u n_u},\qquad
+  M_{\mathrm{user}}=\frac1U\sum_u\overline\ell_u.
+\]
+For $q=\max(1,\lceil0.1U\rceil)$ and $\operatorname{Top}_q$ the users with
+the $q$ largest means, the tail metric is
+\[
+  \Wten(\ell)=\frac1q\sum_{u\in\operatorname{Top}_q}\overline\ell_u.
+\]
+The current central artifacts store elementwise MSE, hence their reported
+\code{mse} reduces to $M_{\mathrm{elem}}$. The per-user merger explicitly
+overwrites \code{mse} with $M_{\mathrm{user}}$. The combined MSE table therefore
+uses these two different weightings, while the W10 table uses the same
+equal-user tail definition for both scopes. This is the implemented artifact
+contract and should be stated whenever the combined table is interpreted.
+
+\section{Experimental details}
+\label{sec:details}
+
+\subsection{Datasets and task grid}
+
+Every CSV column other than \code{date} becomes one univariate series. The
+configured publication datasets are listed in \cref{tab:datasets}; counts are
+after the curated source exclusions in the current \code{config.json} files.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Configured publication datasets. Solar and Weather are resampled to
+hourly cadence during tensor construction.}
+\label{tab:datasets}
+\begin{tabularx}{\linewidth}{@{}lrrlX@{}}
+\toprule
+Dataset & Series & Raw cadence & Used cadence & Construction \\
+\midrule
+ETTh1 & 7 & 1 hour & 1 hour & All seven non-date variables. \\
+Electricity & 312 & 1 hour & 1 hour & 321 raw series; nine configured exclusions. \\
+Traffic & 862 & 1 hour & 1 hour & No configured source exclusion. \\
+Solar & 137 & 10 minutes & 1 hour & Hourly sums. \\
+Weather & 21 & 10 minutes & 1 hour & Hourly means. \\
+Exchange Rate & 8 & 1 day & 1 day & No configured source exclusion. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Full and ultra use
+\[
+  (L,H)\in\{(168,24),(336,48),(504,168),(720,168),(720,720)\}
+\]
+and seeds $\{1,2,3\}$. Test mode uses only Electricity at $(504,168)$ with
+seed 1. A dataset's sibling \code{config.json} is loaded during tensor
+construction: portable top-level options are applied first, the
+\code{timetensors} object overrides them, explicit run values override both,
+and all \code{drop_users} lists are merged additively.
+
+\subsection{Models}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Models exercised by the seven publication launchers.}
+\label{tab:models}
+\begin{tabularx}{\linewidth}{@{}lXl@{}}
+\toprule
+Code name & Implemented forecast & Fit in this project \\
+\midrule
+\code{persistence} & Repeats the last lookback value for all $H$ steps. & None \\
+\code{linear} & One affine map $\reals^{DL}\to\reals^{DH}$. & Adam \\
+\code{periodic_linear} & One affine head per horizon using phase-matched lags, $p=\min(L,168)$. & Adam \\
+\code{sklinear} & Multi-output scikit-learn \code{LinearRegression} over all accessible windows. & Closed-form OLS \\
+\code{dlinear} & Moving-average decomposition (kernel 25) followed by separate per-variable seasonal and trend maps $\reals^L\to\reals^H$. & Adam \\
+\code{patchtst} & Patches of length 16 and stride 8; three encoder layers, 16 heads, $d_{\rm model}=128$, $d_{\rm ff}=256$, learned positional encoding, and a flattened forecast head. & Adam \\
+\code{chronos} & Local frozen Chronos-2 pipeline; the wrapper selects the median quantile and optionally enables cross-learning. & Frozen \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+PatchTST uses attention dropout 0, encoder dropout 0.2, feed-forward/head
+dropout 0.2/0, GELU activations, and residual attention. DLinear and PatchTST
+form the shared model axis: full uses PatchTST and ultra adds DLinear. The
+reference and linear experiments use their fixed method lists instead. The
+central/per-user family uses PatchTST in test and full, and adds Chronos-2 in
+ultra.
+
+\subsection{Optimization, evaluation, and outputs}
+\thispagestyle{fancy}
+
+Unless a family overrides a value, training uses Adam with PyTorch defaults,
+learning rate $10^{-5}$, batch size 256, random training sampling with stride
+1, exhaustive evaluation sampling with stride $H$, and no scheduler, early
+stopping, or gradient clipping. Test runs $E=20$ epochs and validates/logs every
+10 optimizer steps. Full and ultra run $E=10{,}000$ epochs and validate/log
+every 1,000 optimizer steps. As derived in \cref{sec:sampling}, $E$ counts full
+passes over the configured sampler and is not generally the optimizer-step
+count.
+
+Non-filtering families default to dropping users with an accessible constant
+or non-finite lookback in both training and evaluation. The constants family
+sets those controls per policy. The reference family exposes independent
+overrides for its PatchTST choices. Chronos-2 and persistence set $E=0$ and are
+evaluated without optimization.
+
+Evaluation saves elementwise MSE, nMSE, MAE, nMAE, and relative MSE on each
+selected split, together with losses grouped by user, equal-user summaries, and
+W10 summaries. Tables use \code{test1}, average each metric tensor within a
+seed, then report the mean and sample standard deviation across seeds. Each row
+uses an explicit $\times10^m$ scale. Every seed directory contains model,
+history, metadata, loss, and completion artifacts; a signature-matched
+\code{run.complete} permits exact resumption, and tables are regenerated only
+when the selected grid is complete and newer than their workflow marker.
+
+\subsection{Main implementation classes}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Principal classes and their current responsibilities.}
+\label{tab:classes}
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+Class & Responsibility \\
+\midrule
+\code{TimeSeriesData} & Stores $Z$, dates, stable user IDs, optional covariates, and the target dates owned by a split. \\
+\code{IndexSampler} & Builds admissible query dates, applies stride/subsets and pair filtering, and implements the four sampling modes. \\
+\code{TimeSeriesDataset} & Materializes $X_{t,u}$, $Y_{t,u}$, covariates, query IDs, user IDs, and window metadata from a sampled pair. \\
+\code{TimeTensorModel} & Composes normalization, optional covariate augmentation, a base forecaster, inverse normalization, and optional output rules. \\
+\code{LossWrapper} & Applies MSE or MAE after optional lookback-standard-deviation or absolute-lookback-mean scaling. \\
+\code{TorchLearner} & Performs one optimizer update per loader batch, records interval-mean training loss, validates at step frequencies, and returns elementwise evaluation losses. \\
+\code{SkLinearForecaster} & Deterministically unrolls accessible windows, applies the same reversible normalization contract, and fits/predicts with scikit-learn OLS. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The implemented forward path can therefore be summarized as
+\[
+  (Z,S,L,H)\xrightarrow{\text{dataset/sampler}}(X,Y)
+  \xrightarrow{\text{normalize, forecast, invert}}(\widehat Y,Y)
+  \xrightarrow{\text{loss/evaluation}}\text{seed artifacts and tables}.
+\]
 
 \end{document}

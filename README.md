@@ -89,9 +89,10 @@ The jobs under `src/slurm/` cover:
 - central versus per-user PatchTST and Chronos with W10 metrics.
 
 Submit only the numbered `.slurm` files in the project root. Their names show
-the recommended order; they contain scheduler resources and the `TEST_MODE`,
-`BENCHMARK_PROFILE`, and `RUN_MODE` controls. The implementations remain under
-`src/slurm/`:
+the recommended order. Every front is a complete resumable workflow with
+`EXPERIMENT_MODE=test|full|ultra` and default
+`STAGES=train,tables`. Family orchestrators and the shared stage implementations
+remain under `src/slurm/`:
 
 - `01_constants.slurm` -> `benchmark_constants.sh` compares constant-window/user policies.
 - `02_sampling.slurm` -> `benchmark_sampling.sh` compares sampling modes and batch sizes.
@@ -103,34 +104,41 @@ the recommended order; they contain scheduler resources and the `TEST_MODE`,
   saves coefficient plots.
 - `07_central_per_user.slurm` -> `benchmark_central_per_user.sh` compares centralized and per-user training.
 - `benchmark_common.sh` resolves resources, applies the common split/stride and
-  training controls, launches exactly one Python task, and builds tables. It is
-  sourced by the family scripts and is not submitted directly.
+  training controls, and launches exactly one Python task. `stage_train.sh`
+  and `stage_tables.sh` execute the separate stages. These internal scripts are
+  sourced by the family workflows and are not submitted directly.
 
 Each configuration log includes the full model-specific Hydra overrides, so
 otherwise similar rows can be distinguished without consulting the output
 directory.
 
-The launchers have three profiles. `test` is the safe default and narrows the
-common axes to one Electricity/168--24/seed-1 path check; each family still
+The launchers have three scale profiles. `test` is the safe default and narrows the
+common axes to one Electricity/504--168/seed-1 path check; each family still
 runs its own narrow method list (for example, the reference job keeps
 persistence, PatchTST, and Chronos-2). It uses 20 optimizer steps with
-validation/logging every 10 steps. `study` is opt-in: six datasets, 168--24,
-504--168, and 504--504, seeds 1--3, and DLinear for families that use the
-shared model axis. `full` is also opt-in and restores seven settings, seeds
-1--5, and DLinear plus PatchTST where applicable. Study and full use 10,000
-optimizer steps with validation/logging every 1,000 steps. Every profile uses
-learning rate `1e-5`, batch size 256, random sampling, and evaluation stride
-equal to the horizon.
+validation/logging every 10 steps. `full` is the primary methodology grid:
+ETTh1, Electricity, Traffic, Solar, Weather, and Exchange Rate;
+168--24, 336--48, 504--168, 720--168, and 720--720; seeds 1--3; and PatchTST for
+families that use the shared model axis. `ultra` uses the full axes and adds
+DLinear where the family uses the shared model axis. Full and ultra
+use 10,000 optimizer steps with validation/logging every 1,000 steps. Every
+profile uses learning rate `1e-5`, batch size 256, random sampling, and
+evaluation stride equal to the horizon.
+
+The reference and linear families have their own fixed model/method axes rather
+than the shared DLinear/PatchTST axis. Central-versus-per-user uses PatchTST in
+test and full; ultra adds Chronos.
 
 Every benchmark job exposes the same quick check:
 
 ```bash
-sbatch 05_losses.slurm
+EXPERIMENT_MODE=test sbatch 05_losses.slurm
+EXPERIMENT_MODE=full sbatch 05_losses.slurm
+EXPERIMENT_MODE=ultra sbatch 05_losses.slurm
 ```
 
-`TEST_MODE=true` remains a compatibility switch that forces the test profile.
-Use `BENCHMARK_PROFILE=study`, then `BENCHMARK_PROFILE=full`, only after the
-test profile has completed. Every sweep can be narrowed without editing a launcher through
+Use `EXPERIMENT_MODE=full`, then `ultra` after the test profile.
+Every sweep can be narrowed without editing a launcher through
 `DATASETS_OVERRIDE`, `SETTINGS_OVERRIDE`, `SEEDS_OVERRIDE`, and
 `MODELS_OVERRIDE`; values are whitespace-separated. Family-specific overrides
 include `POLICIES_OVERRIDE`, `SAMPLING_CASES_OVERRIDE` (space-separated
@@ -138,48 +146,30 @@ include `POLICIES_OVERRIDE`, `SAMPLING_CASES_OVERRIDE` (space-separated
 `BATCH_SIZES_OVERRIDE`, `LOSSES_OVERRIDE`, `NORMS_OVERRIDE`,
 `LINEAR_METHODS_OVERRIDE`, and `LINEAR_NORMS_OVERRIDE`.
 
-Every family also accepts `RUN_MODE=train`, `RUN_MODE=tables`, or the default
-`RUN_MODE=both`. Use `both` for a smoke test or a narrow job. For a study/full
-sweep, submit independent train-only dataset shards and one dependent table-only
-job over the complete intended axes. For example:
-
-```bash
-family=02_sampling.slurm
-profile=study
-datasets=(etth1 electricity traffic solar weather exchange_rate)
-settings="168:24 504:168 504:504"
-train_jobs=()
-
-for dataset in "${datasets[@]}"; do
-  train_jobs+=("$(BENCHMARK_PROFILE="$profile" RUN_MODE=train DATASETS_OVERRIDE="$dataset" \
-    SETTINGS_OVERRIDE="$settings" sbatch --parsable "$family")")
-done
-
-dependency="$(IFS=:; echo "${train_jobs[*]}")"
-BENCHMARK_PROFILE="$profile" RUN_MODE=tables DATASETS_OVERRIDE="${datasets[*]}" \
-  SETTINGS_OVERRIDE="$settings" \
-  sbatch --dependency="afterok:$dependency" "$family"
-```
-
-Repeat any family-specific method overrides on both the train and table jobs so
-the final method list matches the completed runs. Table mode filters both the
-dataset and setting axes and does not rerun training. Parallel jobs write Hydra
-metadata below a unique family/dataset/setting/method/Slurm-job path, while the
-actual models and metrics retain their stable publication paths.
+The full front runs `STAGES=train,tables`. The training stage writes one
+signature-matched `run.complete` beside each seed's `all_losses.pt` and a
+grid-level `.workflow/train.complete`; it skips only exact completed work. The table stage first requires every
+selected dataset/setting/method/seed, then writes
+`.workflow/tables.complete`; it is skipped when its signature still matches and
+no training completion marker is newer. Outputs created before this completion
+contract must be rerun once. `STAGES=train` and `STAGES=tables` are recovery
+overrides, while `SKIP_COMPLETED=false` forces selected work. Resubmitting the
+same complete front is therefore the normal recovery procedure after a time
+limit.
 
 The recommended execution order is:
 
 1. Run one bare-launcher `test` path check.
-2. Run `BENCHMARK_PROFILE=study sbatch 01_constants.slurm`, then retain the
+2. Run `EXPERIMENT_MODE=full sbatch 01_constants.slurm`, then retain the
    selected constant-user policy.
-3. Run `02_sampling.slurm` with `BENCHMARK_PROFILE=study` for random sampling at batch sizes 64/256/1024
-   and individual sampling at batch size 256.
-4. Run `03_normalizations.slurm` with `BENCHMARK_PROFILE=study`.
-5. Run `04_reference.slurm` with `BENCHMARK_PROFILE=study` for
+3. Run `02_sampling.slurm` with `EXPERIMENT_MODE=full` for all four sampling
+   modes and batch sizes 64/256/1024.
+4. Run `03_normalizations.slurm` with `EXPERIMENT_MODE=full`.
+5. Run `04_reference.slurm` with `EXPERIMENT_MODE=full` for
    persistence/PatchTST/Chronos-2 orders of error under the retained choices.
-6. Run `05_losses.slurm` with `BENCHMARK_PROFILE=study`.
+6. Run `05_losses.slurm` with `EXPERIMENT_MODE=full`.
 7. Run `06_linear_models.slurm`, followed by `07_central_per_user.slurm`, with
-   `BENCHMARK_PROFILE=study`.
+   `EXPERIMENT_MODE=full`.
 
 The reference benchmark uses non-trainable persistence, instance-normalized
 nMSE PatchTST with constant users removed, and frozen Chronos-2. The linear
@@ -203,6 +193,8 @@ instead name an explicit JSON file or directory. Portable loading fields live at
 the top level and TimeTensors-only overrides under `timetensors`; scoped and
 run values override other fields, while every `drop_users` list is merged
 additively. The selected path and applied keys are timestamped in the job log.
+ETTh1 is evaluated with every non-date variable, so its source CSV must contain
+all seven variables rather than only `OT`.
 
 All non-filtering launchers default to dropping users with accessible constant
 look-backs in both training and evaluation. The shared
@@ -211,16 +203,20 @@ different decision from `01_constants.slurm` into sampling,
 normalization, loss, linear, and central/per-user studies. The reference job
 uses the corresponding `REFERENCE_DROP_*` overrides listed above.
 
-Study-profile benchmark tables are emitted once per selected model. The
+Test/full/ultra benchmark tables are emitted once per selected model. The
 linear-model and reference comparisons intentionally use combined tables.
 
-Tables aggregate seed means and standard deviations, display values with two decimals, and include an explicit per-row `\times 10^{m}` multiplier. See `latex/benchmark_experiments.tex` for the complete protocol.
+Tables aggregate seed means and sample standard deviations, display values with
+two decimals, and include an explicit per-row `\times 10^{m}` multiplier. A
+single-seed test cell is valid but has no estimable sample deviation, so it is
+shown without `±`. See `latex/benchmark_experiments.tex` for the complete
+protocol.
 
 All benchmark launchers use the `a100` partition, one CPU per task, concise
 one-word job names, and `logs/%x_%j.{out,err}` for Slurm output. Hydra logs to
-stdout only so the Slurm files remain the canonical run logs. Study and full
-profiles remain sequential within one allocation; use the train/table workflow
-above whenever a complete family cannot fit one allocation.
+stdout only so the Slurm files remain the canonical run logs. Every profile
+remains sequential within one allocation; resubmit the same front to continue
+from its completion markers.
 
 ## Lightweight checks
 
@@ -232,6 +228,7 @@ python src/tests/test_dataloaders.py
 python src/tests/test_models.py
 python src/tests/test_results_table.py
 python src/tests/test_sklearn.py
+python src/tests/test_slurm_workflow.py
 ```
 
 ## Synthetic smoke benchmark
@@ -252,8 +249,9 @@ SVG plots are written to `outputs/synthetic_smoke/`. This smoke runner validates
 the experiment controls and reporting path; the Slurm benchmarks remain the
 authoritative DLinear/PatchTST experiments.
 
-## Experiment guides
+## Experiment protocol
 
-Concise one-page theoretical and implementation notes for all seven benchmark
-families are under `latex/experiment_guides/`. Compiled versions are written to
-the same directory beside their `.tex` sources, with copies in `outputs/pdf/`.
+`latex/benchmark_experiments.tex` is the single LaTeX source for the forecasting
+task, all seven benchmark families, the shared datasets and settings, and the
+main implementation classes. Its compiled PDF is written to
+`outputs/pdf/benchmark_experiments.pdf`.

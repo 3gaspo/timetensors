@@ -45,6 +45,19 @@ def main() -> None:
         assert "672--168" not in latex
         assert "traffic" in latex
 
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _save(root, "electricity", "504_168", "reference", 0.0012, seed=1)
+        _save(root, "electricity", "504_168", "candidate", 0.0009, seed=1)
+        output = generate_results_table(
+            root,
+            methods=["reference", "candidate"],
+            reference="reference",
+            show_std=True,
+        )
+        latex = output.read_text(encoding="utf-8")
+        assert r"\pm" not in latex
+
     print("results table checks passed")
 
 

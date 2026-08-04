@@ -1,7 +1,6 @@
 #!/bin/bash
 # Compare random/individual sampling and batch-size choices.
 set -euo pipefail
-TEST_MODE="${TEST_MODE:-false}"
 source "$(dirname "${BASH_SOURCE[0]}")/benchmark_common.sh"
 OUT_ROOT="$ROOT/outputs/sampling"
 SAMPLING_CASES=()
@@ -15,14 +14,12 @@ elif [ -n "${SAMPLING_MODES_OVERRIDE:-}" ] || [ -n "${BATCH_SIZES_OVERRIDE:-}" ]
       SAMPLING_CASES+=("${mode}:${batch}")
     done
   done
-elif [ "$BENCHMARK_PROFILE" = full ]; then
+elif [ "$EXPERIMENT_MODE" = full ] || [ "$EXPERIMENT_MODE" = ultra ]; then
   for mode in random dates individuals all; do
     for batch in 64 256 1024; do
       SAMPLING_CASES+=("${mode}:${batch}")
     done
   done
-elif [ "$BENCHMARK_PROFILE" = study ]; then
-  SAMPLING_CASES=(random:64 random:256 random:1024 individuals:256)
 else
   SAMPLING_CASES=(random:256)
 fi
@@ -36,7 +33,7 @@ for sampling_case in "${SAMPLING_CASES[@]}"; do
   fi
 done
 
-if [ "$RUN_MODE" != tables ]; then
+run_training() {
   for dataset in "${DATASETS[@]}"; do
     for setting in "${SETTINGS[@]}"; do
       for model in "${MODELS[@]}"; do
@@ -50,10 +47,29 @@ if [ "$RUN_MODE" != tables ]; then
       done
     done
   done
-fi
-if [ "$RUN_MODE" != train ]; then
+}
+
+run_tables() {
   for model in "${MODELS[@]}"; do
     methods=(); for sampling_case in "${SAMPLING_CASES[@]}"; do mode="${sampling_case%%:*}"; batch="${sampling_case##*:}"; methods+=("${model}_${mode}_bs${batch}"); done
     write_table "$model" mse "$(IFS=,; echo "${methods[*]}")"
   done
-fi
+}
+
+WORKFLOW_STATE_DIR="$OUT_ROOT/.workflow"
+TABLE_INPUT_NAME=run.complete
+TABLE_STAGE_SIGNATURE="v1|family=sampling|mode=$EXPERIMENT_MODE|datasets=$DATASETS_CSV|settings=$SETTINGS_CSV|models=${MODELS[*]}|seeds=$SEEDS_CSV|cases=${SAMPLING_CASES[*]}"
+TRAIN_STAGE_SIGNATURE="$TABLE_STAGE_SIGNATURE|$COMMON_TRAIN_SIGNATURE"
+TABLE_REQUIRED_OUTPUTS=()
+TABLE_EXPECTED_METHODS=()
+for model in "${MODELS[@]}"; do
+  TABLE_REQUIRED_OUTPUTS+=("$OUT_ROOT/results_${model}_mse.tex")
+  for sampling_case in "${SAMPLING_CASES[@]}"; do
+    mode="${sampling_case%%:*}"; batch="${sampling_case##*:}"
+    TABLE_EXPECTED_METHODS+=("${model}_${mode}_bs${batch}")
+  done
+done
+log_section "workflow start family=sampling mode=$EXPERIMENT_MODE stages=$STAGES_SPEC"
+source "$ROOT/src/slurm/stage_train.sh"
+source "$ROOT/src/slurm/stage_tables.sh"
+log_section "workflow done family=sampling output=$OUT_ROOT"

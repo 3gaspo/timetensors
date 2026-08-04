@@ -1,13 +1,12 @@
 #!/bin/bash
 # Compare one centralized model with one independently fitted model per user.
 set -euo pipefail
-TEST_MODE="${TEST_MODE:-false}"
 source "$(dirname "${BASH_SOURCE[0]}")/benchmark_common.sh"
 OUT_ROOT="$ROOT/outputs/central_per_user"
-if [ "$BENCHMARK_PROFILE" = test ]; then
-  DEFAULT_USER_MODELS="patchtst"
-else
+if [ "$EXPERIMENT_MODE" = ultra ]; then
   DEFAULT_USER_MODELS="patchtst chronos"
+else
+  DEFAULT_USER_MODELS="patchtst"
 fi
 read -ra USER_MODELS <<< "${USER_MODELS_OVERRIDE:-$DEFAULT_USER_MODELS}"
 CHRONOS_WEIGHTS_PATH="$(resolve_weight_path chronos2)"
@@ -16,7 +15,7 @@ for model in "${USER_MODELS[@]}"; do
   METHODS+=("${model}_central" "${model}_per_user")
 done
 
-if [ "$RUN_MODE" != tables ]; then
+run_training() {
   for dataset in "${DATASETS[@]}"; do
     for setting in "${SETTINGS[@]}"; do
       for scope in central per_user; do
@@ -36,9 +35,21 @@ if [ "$RUN_MODE" != tables ]; then
       done
     done
   done
-fi
-if [ "$RUN_MODE" != train ]; then
+}
+
+run_tables() {
   METHOD_ARG="$(IFS=,; echo "${METHODS[*]}")"
   write_table combined mse "$METHOD_ARG"
   write_table combined w10_mse "$METHOD_ARG"
-fi
+}
+
+WORKFLOW_STATE_DIR="$OUT_ROOT/.workflow"
+TABLE_INPUT_NAME=run.complete
+TABLE_STAGE_SIGNATURE="v1|family=central_per_user|mode=$EXPERIMENT_MODE|datasets=$DATASETS_CSV|settings=$SETTINGS_CSV|seeds=$SEEDS_CSV|models=${USER_MODELS[*]}"
+TRAIN_STAGE_SIGNATURE="$TABLE_STAGE_SIGNATURE|$COMMON_TRAIN_SIGNATURE"
+TABLE_REQUIRED_OUTPUTS=("$OUT_ROOT/results_combined_mse.tex" "$OUT_ROOT/results_combined_w10_mse.tex")
+TABLE_EXPECTED_METHODS=("${METHODS[@]}")
+log_section "workflow start family=central_per_user mode=$EXPERIMENT_MODE stages=$STAGES_SPEC"
+source "$ROOT/src/slurm/stage_train.sh"
+source "$ROOT/src/slurm/stage_tables.sh"
+log_section "workflow done family=central_per_user output=$OUT_ROOT"

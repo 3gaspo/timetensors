@@ -1,10 +1,9 @@
 #!/bin/bash
 # Compare trainable and closed-form linear models and save their coefficients.
 set -euo pipefail
-TEST_MODE="${TEST_MODE:-false}"
 source "$(dirname "${BASH_SOURCE[0]}")/benchmark_common.sh"
 OUT_ROOT="$ROOT/outputs/linear_models"
-if [ "$BENCHMARK_PROFILE" = test ]; then
+if [ "$EXPERIMENT_MODE" = test ]; then
   DEFAULT_LINEAR_METHODS="linear sklinear"
   DEFAULT_LINEAR_NORMS="instance"
 else
@@ -20,7 +19,7 @@ for method in "${LINEAR_METHODS[@]}"; do
   done
 done
 
-if [ "$RUN_MODE" != tables ]; then
+run_training() {
   for dataset in "${DATASETS[@]}"; do
     for setting in "${SETTINGS[@]}"; do
       run_case scripts.experiment "$dataset" "$setting" persistence \
@@ -43,7 +42,19 @@ if [ "$RUN_MODE" != tables ]; then
       done
     done
   done
-fi
-if [ "$RUN_MODE" != train ]; then
+}
+
+run_tables() {
   write_table combined mse "$(IFS=,; echo "${METHODS[*]}")"
-fi
+}
+
+WORKFLOW_STATE_DIR="$OUT_ROOT/.workflow"
+TABLE_INPUT_NAME=run.complete
+TABLE_STAGE_SIGNATURE="v1|family=linear_models|mode=$EXPERIMENT_MODE|datasets=$DATASETS_CSV|settings=$SETTINGS_CSV|seeds=$SEEDS_CSV|methods=${LINEAR_METHODS[*]}|norms=${LINEAR_NORMS[*]}"
+TRAIN_STAGE_SIGNATURE="$TABLE_STAGE_SIGNATURE|$COMMON_TRAIN_SIGNATURE"
+TABLE_REQUIRED_OUTPUTS=("$OUT_ROOT/results_combined_mse.tex")
+TABLE_EXPECTED_METHODS=("${METHODS[@]}")
+log_section "workflow start family=linear_models mode=$EXPERIMENT_MODE stages=$STAGES_SPEC"
+source "$ROOT/src/slurm/stage_train.sh"
+source "$ROOT/src/slurm/stage_tables.sh"
+log_section "workflow done family=linear_models output=$OUT_ROOT"
