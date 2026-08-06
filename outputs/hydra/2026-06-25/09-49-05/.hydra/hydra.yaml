@@ -1,0 +1,176 @@
+hydra:
+  run:
+    dir: outputs/hydra/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+    dir: outputs/hydra/multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${hydra.job.num}
+  launcher:
+    _target_: hydra._internal.core_plugins.basic_launcher.BasicLauncher
+  sweeper:
+    _target_: hydra._internal.core_plugins.basic_sweeper.BasicSweeper
+    max_batch_size: null
+    params: null
+  help:
+    app_name: ${hydra.job.name}
+    header: '${hydra.help.app_name} is powered by Hydra.
+
+      '
+    footer: 'Powered by Hydra (https://hydra.cc)
+
+      Use --hydra-help to view Hydra specific help
+
+      '
+    template: '${hydra.help.header}
+
+      == Configuration groups ==
+
+      Compose your configuration from those groups (group=option)
+
+
+      $APP_CONFIG_GROUPS
+
+
+      == Config ==
+
+      Override anything in the config (foo.bar=value)
+
+
+      $CONFIG
+
+
+      ${hydra.help.footer}
+
+      '
+  hydra_help:
+    template: 'Hydra (${hydra.runtime.version})
+
+      See https://hydra.cc for more info.
+
+
+      == Flags ==
+
+      $FLAGS_HELP
+
+
+      == Configuration groups ==
+
+      Compose your configuration from those groups (For example, append hydra/job_logging=disabled
+      to command line)
+
+
+      $HYDRA_CONFIG_GROUPS
+
+
+      Use ''--cfg hydra'' to Show the Hydra config.
+
+      '
+    hydra_help: ???
+  hydra_logging:
+    version: 1
+    formatters:
+      simple:
+        format: '[%(asctime)s][HYDRA] %(message)s'
+    handlers:
+      console:
+        class: logging.StreamHandler
+        formatter: simple
+        stream: ext://sys.stdout
+    root:
+      level: INFO
+      handlers:
+      - console
+    loggers:
+      logging_example:
+        level: DEBUG
+    disable_existing_loggers: false
+  job_logging:
+    version: 1
+    formatters:
+      simple:
+        format: '[%(asctime)s][%(name)s][%(levelname)s] - %(message)s'
+    handlers:
+      console:
+        class: logging.StreamHandler
+        formatter: simple
+        stream: ext://sys.stdout
+      file:
+        class: logging.FileHandler
+        formatter: simple
+        filename: ${hydra.runtime.output_dir}/${hydra.job.name}.log
+    root:
+      level: INFO
+      handlers:
+      - console
+      - file
+    disable_existing_loggers: false
+  env: {}
+  mode: RUN
+  searchpath: []
+  callbacks: {}
+  output_subdir: .hydra
+  overrides:
+    hydra:
+    - hydra.run.dir=outputs/hydra/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    - hydra.mode=RUN
+    task:
+    - +data.raw_path=../datasets/electricity
+    - +data.path=../datasets/electricity
+    - +data.name=electricity
+    - +data.drop_users='57;106;127;182;298;6;113;143'
+    - +task.lags=168
+    - +task.horizon=24
+    - +data.splits.date_splits=[0.6,0.2,0.2]
+    - +data.sampling.train_idx_mode=individuals
+    - +data.sampling.eval_idx_mode=all
+    - +data.sampling.eval_stride=256
+    - +training.batch_size=256
+    - +training.device=gpu
+    - +training.epochs=1000
+    - +training.loss=nmse
+    - +model.name=linear
+    - +model.path=linear
+    - +normalization.name=instance
+    - +experiment.rebuild_dataset=false
+    - +experiment.recompute_stats=true
+    - +output.dir=outputs/results/electricity/168_24
+    - +output.name=linear
+  job:
+    name: experiment
+    chdir: null
+    override_dirname: +data.drop_users='57;106;127;182;298;6;113;143',+data.name=electricity,+data.path=../datasets/electricity,+data.raw_path=../datasets/electricity,+data.sampling.eval_idx_mode=all,+data.sampling.eval_stride=256,+data.sampling.train_idx_mode=individuals,+data.splits.date_splits=[0.6,0.2,0.2],+experiment.rebuild_dataset=false,+experiment.recompute_stats=true,+model.name=linear,+model.path=linear,+normalization.name=instance,+output.dir=outputs/results/electricity/168_24,+output.name=linear,+task.horizon=24,+task.lags=168,+training.batch_size=256,+training.device=gpu,+training.epochs=1000,+training.loss=nmse
+    id: ???
+    num: ???
+    config_name: config
+    env_set: {}
+    env_copy: []
+    config:
+      override_dirname:
+        kv_sep: '='
+        item_sep: ','
+        exclude_keys: []
+  runtime:
+    version: 1.3.3
+    version_base: '1.3'
+    cwd: /home/h61084/codes/timetensors
+    config_sources:
+    - path: hydra.conf
+      schema: pkg
+      provider: hydra
+    - path: /home/h61084/codes/timetensors/timetensors/conf
+      schema: file
+      provider: main
+    - path: ''
+      schema: structured
+      provider: schema
+    output_dir: /home/h61084/codes/timetensors/outputs/hydra/2026-06-25/09-49-05
+    choices:
+      hydra/env: default
+      hydra/callbacks: null
+      hydra/job_logging: default
+      hydra/hydra_logging: default
+      hydra/hydra_help: default
+      hydra/help: default
+      hydra/sweeper: basic
+      hydra/launcher: basic
+      hydra/output: default
+  verbose: false

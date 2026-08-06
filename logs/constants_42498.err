@@ -1,0 +1,3 @@
+srun: Job step aborted: Waiting up to 32 seconds for job step to finish.
+slurmstepd: error: *** STEP 42498.0 ON dgx-a100 CANCELLED AT 2026-08-06T16:15:12 ***
+slurmstepd: error: *** JOB 42498 ON dgx-a100 CANCELLED AT 2026-08-06T16:15:12 ***
