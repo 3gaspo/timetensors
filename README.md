@@ -216,7 +216,7 @@ single-seed test cell is valid but has no estimable sample deviation, so it is
 shown without `±`. See `latex/benchmark_experiments.tex` for the complete
 protocol.
 
-All benchmark launchers use the `a100` partition, one CPU per task, concise
+All benchmark launchers use the `h100` partition, one CPU per task, concise
 one-word job names, and `logs/%x_%j.{out,err}` for Slurm output. Hydra logs to
 stdout only so the Slurm files remain the canonical run logs. Every profile
 remains sequential within one allocation; resubmit the same front to continue

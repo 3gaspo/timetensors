@@ -15,6 +15,8 @@ class SlurmWorkflowTest(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             self.assertIn('EXPERIMENT_MODE="${EXPERIMENT_MODE:-test}"', text)
             self.assertIn('STAGES="${STAGES:-train,tables}"', text)
+            self.assertIn("#SBATCH --partition=h100", text)
+            self.assertNotIn("#SBATCH --partition=a100", text)
             self.assertNotIn("BENCHMARK_PROFILE", text)
             self.assertNotIn("RUN_MODE", text)
             self.assertNotIn("TEST_MODE", text)
