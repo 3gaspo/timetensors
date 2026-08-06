@@ -1,12 +1,13 @@
 #!/bin/bash
-# Compare constant-window and constant-user filtering policies.
+# Compare constant-window filtering against keeping all pairs and dropping all
+# affected users.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/benchmark_common.sh"
 OUT_ROOT="$ROOT/outputs/constants"
 if [ "$EXPERIMENT_MODE" = full ] || [ "$EXPERIMENT_MODE" = ultra ]; then
-  DEFAULT_POLICIES="keep remove_train_windows remove_eval_windows remove_all_windows drop_train_users drop_eval_users drop_all_users"
+  DEFAULT_POLICIES="keep remove_train_windows remove_eval_windows remove_all_windows drop_all_users"
 else
-  DEFAULT_POLICIES="keep drop_train_users drop_all_users"
+  DEFAULT_POLICIES="keep remove_all_windows drop_all_users"
 fi
 read -ra POLICIES <<< "${POLICIES_OVERRIDE:-$DEFAULT_POLICIES}"
 
@@ -16,10 +17,14 @@ run_training() {
       for model in "${MODELS[@]}"; do
         for policy in "${POLICIES[@]}"; do
           train_windows=false; eval_windows=false; train_users=false; eval_users=false
-          [[ "$policy" =~ remove_train|remove_all ]] && train_windows=true
-          [[ "$policy" =~ remove_eval|remove_all ]] && eval_windows=true
-          [[ "$policy" =~ drop_train|drop_all ]] && train_users=true
-          [[ "$policy" =~ drop_eval|drop_all ]] && eval_users=true
+          case "$policy" in
+            keep) ;;
+            remove_train_windows) train_windows=true ;;
+            remove_eval_windows) eval_windows=true ;;
+            remove_all_windows) train_windows=true; eval_windows=true ;;
+            drop_all_users) train_users=true; eval_users=true ;;
+            *) log_error "unknown constants policy=$policy"; exit 2 ;;
+          esac
           run_case scripts.experiment "$dataset" "$setting" "${model}_${policy}" \
             +model.name="$model" +model.path="$model" +normalization.name=instance \
             +data.sampling.remove_train_cte="$train_windows" \

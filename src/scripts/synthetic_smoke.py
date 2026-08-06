@@ -322,8 +322,6 @@ def run_benchmark(values: np.ndarray) -> tuple[pd.DataFrame, pd.DataFrame]:
         "remove_train_windows": (True, False, False, False),
         "remove_eval_windows": (False, False, True, False),
         "remove_all_windows": (True, False, True, False),
-        "drop_train_users": (False, True, False, False),
-        "drop_eval_users": (False, False, False, True),
         "drop_all_users": (False, True, False, True),
     }
     for method, (remove_train, drop_train, remove_eval, drop_eval) in constant_policies.items():

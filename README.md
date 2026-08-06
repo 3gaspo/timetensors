@@ -63,7 +63,8 @@ python -m scripts.experiment \
 - Sampling modes: `random`, `dates`, `individuals`, and `all`; train and evaluation strides are independent.
 - Saved date/pair subset specifications carry `date_anchor=query_t`; legacy
   start-index subset files are rejected and must be regenerated.
-- Constant handling: remove individual constant windows independently in train/evaluation, or drop users containing an accessible constant/non-finite lookback independently in train/evaluation.
+- Constant handling: remove individual constant windows independently in
+  train/evaluation, or compare against dropping affected users from both.
 - Losses: `mse`, `mae`, `nmse`, `nmae`, and `relative_mse`.
 - Normalization: identity, global standard, global min-max, instance min-max, instance normalization/RevIN, and the research variants retained under `models/`.
 - Models: persistence and linear baselines, DLinear, PatchTST, Chronos, TabPFN, and sklearn linear regression.
@@ -81,7 +82,7 @@ written below `<output.dir>/<output.name>/`, including `model_state.pt`,
 The jobs under `src/slurm/` cover:
 
 - a reference order-of-error comparison between persistence, PatchTST, and Chronos-2;
-- constant-window and constant-user removal;
+- constant-window removal with a drop-all-affected-users comparison;
 - sampling mode and batch size;
 - training losses, including relative MSE;
 - normalization methods, including global min-max;
@@ -94,7 +95,8 @@ the recommended order. Every front is a complete resumable workflow with
 `STAGES=train,tables`. Family orchestrators and the shared stage implementations
 remain under `src/slurm/`:
 
-- `01_constants.slurm` -> `benchmark_constants.sh` compares constant-window/user policies.
+- `01_constants.slurm` -> `benchmark_constants.sh` compares keeping all pairs,
+  train/evaluation/both window removal, and dropping all affected users.
 - `02_sampling.slurm` -> `benchmark_sampling.sh` compares sampling modes and batch sizes.
 - `03_normalizations.slurm` -> `benchmark_normalizations.sh` compares normalization parameterizations.
 - `04_reference.slurm` -> `benchmark_reference.sh` establishes persistence, PatchTST, and Chronos-2
@@ -118,7 +120,7 @@ runs its own narrow method list (for example, the reference job keeps
 persistence, PatchTST, and Chronos-2). It uses 20 optimizer steps with
 validation/logging every 10 steps. `full` is the primary methodology grid:
 ETTh1, Electricity, Traffic, Solar, Weather, and Exchange Rate;
-168--24, 336--48, 504--168, 720--168, and 720--720; seeds 1--3; and PatchTST for
+168--24, 336--48, and 504--168; seeds 1--3; and PatchTST for
 families that use the shared model axis. `ultra` uses the full axes and adds
 DLinear where the family uses the shared model axis. Full and ultra
 use 10,000 optimizer steps with validation/logging every 1,000 steps. Every
@@ -160,8 +162,8 @@ limit.
 The recommended execution order is:
 
 1. Run one bare-launcher `test` path check.
-2. Run `EXPERIMENT_MODE=full sbatch 01_constants.slurm`, then retain the
-   selected constant-user policy.
+2. Run `EXPERIMENT_MODE=full sbatch 01_constants.slurm` and compare the three
+   window-removal scopes against keeping all pairs and dropping all affected users.
 3. Run `02_sampling.slurm` with `EXPERIMENT_MODE=full` for all four sampling
    modes and batch sizes 64/256/1024.
 4. Run `03_normalizations.slurm` with `EXPERIMENT_MODE=full`.
@@ -184,8 +186,10 @@ Dataset and weight roots are resolved in this order: an explicit `DATA_ROOT`
 or `WEIGHTS_ROOT`, a non-empty project-local directory, a non-empty parent
 directory, then one additional shared-parent candidate. When this repository
 is copied elsewhere, set the two environment variables explicitly.
-Set `REBUILD_DATASETS=true` only on the first job that prepares a clean dataset
-root; dependent jobs should reuse it rather than rebuilding concurrently.
+If a selected dataset has no `*values.pt` tensor payload, its first pending
+configuration rebuilds the tensors automatically. `REBUILD_DATASETS=true`
+forces a rebuild even when tensors exist; do not force concurrent rebuilds of
+the same dataset.
 
 When tensors are rebuilt, `config.json` is discovered beside `data.raw_path`
 (whether that value is a dataset directory or a CSV). `data.config_path` may
@@ -198,10 +202,10 @@ all seven variables rather than only `OT`.
 
 All non-filtering launchers default to dropping users with accessible constant
 look-backs in both training and evaluation. The shared
-`DROP_TRAIN_CONSTANT_USERS` and `DROP_EVAL_CONSTANT_USERS` overrides carry a
-different decision from `01_constants.slurm` into sampling,
-normalization, loss, linear, and central/per-user studies. The reference job
-uses the corresponding `REFERENCE_DROP_*` overrides listed above.
+`DROP_TRAIN_CONSTANT_USERS` and `DROP_EVAL_CONSTANT_USERS` overrides can disable
+that behavior for sampling, normalization, loss, linear, and central/per-user
+studies. Window removal is varied only by `01_constants.slurm`. The reference
+job uses the corresponding `REFERENCE_DROP_*` overrides listed above.
 
 Test/full/ultra benchmark tables are emitted once per selected model. The
 linear-model and reference comparisons intentionally use combined tables.

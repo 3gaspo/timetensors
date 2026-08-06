@@ -144,10 +144,9 @@ user--date pair if at least one variable is finite and non-constant, whereas
 user filtering drops a user if any accessible variable-window is constant or
 non-finite. These definitions coincide for the $D=1$ benchmark tensors.
 
-The launcher compares exactly seven policies: keep all pairs;
+The launcher compares exactly five policies in full and ultra: keep all pairs;
 \code{remove_train_windows}, \code{remove_eval_windows}, or
-\code{remove_all_windows}; and \code{drop_train_users},
-\code{drop_eval_users}, or \code{drop_all_users}. Train and evaluation
+\code{remove_all_windows}; and \code{drop_all_users}. Train and evaluation
 interventions are deliberately separated: train-only filtering tests an
 optimization effect, whereas evaluation filtering changes the measured
 population. Curated source exclusions from each dataset's \code{config.json}
@@ -384,7 +383,7 @@ Exchange Rate & 8 & 1 day & 1 day & No configured source exclusion. \\
 
 Full and ultra use
 \[
-  (L,H)\in\{(168,24),(336,48),(504,168),(720,168),(720,720)\}
+  (L,H)\in\{(168,24),(336,48),(504,168)\}
 \]
 and seeds $\{1,2,3\}$. Test mode uses only Electricity at $(504,168)$ with
 seed 1. A dataset's sibling \code{config.json} is loaded during tensor

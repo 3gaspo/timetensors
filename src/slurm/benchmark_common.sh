@@ -64,7 +64,7 @@ case "$EXPERIMENT_MODE" in
     VALID_EVAL_FREQ="${VALID_EVAL_FREQ:-1000}"
     LOGGING_EVAL_FREQ="${LOGGING_EVAL_FREQ:-1000}"
     read -ra DATASETS <<< "${DATASETS_OVERRIDE:-ETTh1 electricity traffic solar weather exchange_rate}"
-    read -ra SETTINGS <<< "${SETTINGS_OVERRIDE:-168:24 336:48 504:168 720:168 720:720}"
+    read -ra SETTINGS <<< "${SETTINGS_OVERRIDE:-168:24 336:48 504:168}"
     read -ra SEEDS <<< "${SEEDS_OVERRIDE:-1 2 3}"
     read -ra MODELS <<< "${MODELS_OVERRIDE:-patchtst}"
     ;;
@@ -73,7 +73,7 @@ case "$EXPERIMENT_MODE" in
     VALID_EVAL_FREQ="${VALID_EVAL_FREQ:-1000}"
     LOGGING_EVAL_FREQ="${LOGGING_EVAL_FREQ:-1000}"
     read -ra DATASETS <<< "${DATASETS_OVERRIDE:-ETTh1 electricity traffic solar weather exchange_rate}"
-    read -ra SETTINGS <<< "${SETTINGS_OVERRIDE:-168:24 336:48 504:168 720:168 720:720}"
+    read -ra SETTINGS <<< "${SETTINGS_OVERRIDE:-168:24 336:48 504:168}"
     read -ra SEEDS <<< "${SEEDS_OVERRIDE:-1 2 3}"
     read -ra MODELS <<< "${MODELS_OVERRIDE:-patchtst dlinear}"
     ;;
@@ -140,6 +140,13 @@ resolve_weight_path() {
   echo "$WEIGHTS_ROOT/$relative_path"
 }
 
+dataset_has_tensor_payload() {
+  local dataset_directory="$1" values_file
+  [ -d "$dataset_directory" ] || return 1
+  values_file="$(find "$dataset_directory" -maxdepth 1 -type f -name '*values.pt' -print -quit 2>/dev/null || true)"
+  [ -n "$values_file" ]
+}
+
 run_case() {
   local module="$1" dataset="$2" setting="$3" method="$4"
   shift 4
@@ -165,16 +172,24 @@ run_case() {
     return
   fi
   run_seeds_csv="$(IFS=,; echo "${pending_seeds[*]}")"
-  local rebuild=false
-  if [ "$REBUILD_DATASETS" = true ] && [ -z "${DATASET_BUILT[$dataset]:-}" ]; then
-    rebuild=true
-    DATASET_BUILT[$dataset]=1
+  local rebuild=false rebuild_reason=not_needed
+  if [ -z "${DATASET_BUILT[$dataset]:-}" ]; then
+    if [ "$REBUILD_DATASETS" = true ]; then
+      rebuild=true
+      rebuild_reason=forced
+    elif ! dataset_has_tensor_payload "$case_data_root/$dataset"; then
+      rebuild=true
+      rebuild_reason=missing_tensor_payload
+    fi
+    if [ "$rebuild" = true ]; then
+      DATASET_BUILT[$dataset]=1
+    fi
   fi
   local config_args=()
   if [ -f "$case_data_root/$dataset/config.json" ]; then
     config_args+=(+data.config_path="$case_data_root/$dataset/config.json")
   fi
-  log_section "configuration dataset=$dataset lags=$lags horizon=$horizon method=$method module=$module requested_seeds=$SEEDS_CSV run_seeds=$run_seeds_csv data_root=$case_data_root train_sampling=$TRAIN_MODE train_stride=1 eval_sampling=all eval_stride=$horizon batch_size=$BS learning_rate=$LR epochs=$EPOCHS rebuild_dataset=$rebuild overrides=$*"
+  log_section "configuration dataset=$dataset lags=$lags horizon=$horizon method=$method module=$module requested_seeds=$SEEDS_CSV run_seeds=$run_seeds_csv data_root=$case_data_root train_sampling=$TRAIN_MODE train_stride=1 eval_sampling=all eval_stride=$horizon batch_size=$BS learning_rate=$LR epochs=$EPOCHS rebuild_dataset=$rebuild rebuild_reason=$rebuild_reason overrides=$*"
   srun --ntasks=1 python -m "$module" \
     +data.raw_path="$case_data_root/$dataset" \
     +data.path="$case_data_root/$dataset" \
