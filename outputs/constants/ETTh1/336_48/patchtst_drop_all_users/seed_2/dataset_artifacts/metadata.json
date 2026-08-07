@@ -1,0 +1,190 @@
+{
+  "version": 1,
+  "kind": "loader_metadata",
+  "dataset": {
+    "values": [
+      7,
+      1,
+      17420
+    ],
+    "individual_context": null,
+    "global_context": null,
+    "individuals": 7,
+    "variates": 1,
+    "dates": 17420,
+    "target_dates": 17420,
+    "first_target_date_id": 0,
+    "last_target_date_id": 17419,
+    "source": "/home/h61084/codes/timetensors/../datasets/ETTh1"
+  },
+  "task": {
+    "lags": 336,
+    "horizon": 48
+  },
+  "window_anchor": "query_t",
+  "sampling": {
+    "train_idx_mode": "random",
+    "eval_idx_mode": "all",
+    "train_stride": 1,
+    "eval_stride": 48,
+    "drop_train_constant_individuals": true,
+    "drop_eval_constant_individuals": true,
+    "remove_train_cte": false,
+    "remove_eval_cte": false,
+    "shuffle_train": true,
+    "shuffle_eval": false,
+    "train_block_individuals": 1,
+    "eval_block_individuals": 1,
+    "use_individual_context": true,
+    "use_global_context": true
+  },
+  "subsets": {},
+  "stats": {
+    "computed": true,
+    "max_windows": null,
+    "seed": 2,
+    "eps": 1e-08
+  },
+  "scope": "dataset",
+  "splits": {
+    "creation": {
+      "creation_mode": "generated",
+      "access_mode": "created",
+      "randomized": false,
+      "date_splits": [
+        0.6,
+        0.2,
+        0.2
+      ],
+      "indiv_split": 1.0,
+      "shuffle_individuals": true,
+      "seed": 2
+    },
+    "splits": {
+      "train": {
+        "values": [
+          7,
+          1,
+          17420
+        ],
+        "individual_context": null,
+        "global_context": null,
+        "individuals": 7,
+        "variates": 1,
+        "dates": 17420,
+        "target_dates": 10452,
+        "first_target_date_id": 0,
+        "last_target_date_id": 10451
+      },
+      "valid1": {
+        "values": [
+          7,
+          1,
+          17420
+        ],
+        "individual_context": null,
+        "global_context": null,
+        "individuals": 7,
+        "variates": 1,
+        "dates": 17420,
+        "target_dates": 3484,
+        "first_target_date_id": 10452,
+        "last_target_date_id": 13935
+      },
+      "test1": {
+        "values": [
+          7,
+          1,
+          17420
+        ],
+        "individual_context": null,
+        "global_context": null,
+        "individuals": 7,
+        "variates": 1,
+        "dates": 17420,
+        "target_dates": 3484,
+        "first_target_date_id": 13936,
+        "last_target_date_id": 17419
+      }
+    }
+  },
+  "loaders": {
+    "train": {
+      "creation": {
+        "creation_mode": "none",
+        "access_mode": "none",
+        "randomized": false,
+        "ratio": 1.0
+      },
+      "mode": "random",
+      "subset_mode": null,
+      "subset_size": null,
+      "stride": 1,
+      "block_individuals": 1,
+      "users_per_item": 1,
+      "remove_cte": false,
+      "candidate_individuals": 7,
+      "candidate_dates": 10069,
+      "true_length": 1,
+      "dataset_length": 1,
+      "batch_size": 256,
+      "effective_first_batch_size": 1,
+      "batches": 1,
+      "potential_windows": 70483,
+      "accessible_windows": 70483,
+      "constant_removed_windows": 0
+    },
+    "valid1": {
+      "creation": {
+        "creation_mode": "none",
+        "access_mode": "none",
+        "randomized": false,
+        "ratio": 1.0
+      },
+      "mode": "all",
+      "subset_mode": null,
+      "subset_size": null,
+      "stride": 48,
+      "block_individuals": 1,
+      "users_per_item": 1,
+      "remove_cte": false,
+      "candidate_individuals": 7,
+      "candidate_dates": 72,
+      "true_length": 504,
+      "dataset_length": 504,
+      "batch_size": 256,
+      "effective_first_batch_size": 256,
+      "batches": 2,
+      "potential_windows": 504,
+      "accessible_windows": 504,
+      "constant_removed_windows": 0,
+      "candidate_pairs": 504
+    },
+    "test1": {
+      "creation": {
+        "creation_mode": "none",
+        "access_mode": "none",
+        "randomized": false,
+        "ratio": 1.0
+      },
+      "mode": "all",
+      "subset_mode": null,
+      "subset_size": null,
+      "stride": 48,
+      "block_individuals": 1,
+      "users_per_item": 1,
+      "remove_cte": false,
+      "candidate_individuals": 7,
+      "candidate_dates": 72,
+      "true_length": 504,
+      "dataset_length": 504,
+      "batch_size": 256,
+      "effective_first_batch_size": 256,
+      "batches": 2,
+      "potential_windows": 504,
+      "accessible_windows": 504,
+      "constant_removed_windows": 0,
+      "candidate_pairs": 504
+    }
+  }
+}

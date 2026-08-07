@@ -1,0 +1,125 @@
+{
+  "train": {
+    "metadata": {
+      "batch_size": 256,
+      "batches": 1,
+      "dataset_length": 1,
+      "max_windows": null,
+      "eps": 1e-08,
+      "components": [
+        {
+          "values": [
+            7,
+            1,
+            17420
+          ],
+          "lags": 168,
+          "horizon": 24,
+          "accessible_windows": 71827,
+          "sampled_windows": 71827
+        }
+      ]
+    },
+    "accessible_windows": 71827,
+    "sampled_windows": 71827,
+    "item_windows": 71827,
+    "variate_windows": 71827,
+    "finite_variate_windows": 71827,
+    "invalid_variate_windows": 0,
+    "constant_variate_windows": 0,
+    "lookback_mean": 5.198089985381567,
+    "lookback_std": 2.258635150419046,
+    "future_mean": 5.151412293993571,
+    "future_std": 1.8556664252878508,
+    "lookback_value_mean": 5.19808998538158,
+    "lookback_value_std": 7.212731235680691,
+    "lookback_value_min": -21.28499984741211,
+    "lookback_value_max": 46.00699996948242,
+    "future_value_mean": 5.151412293993571,
+    "future_value_std": 1.8556664252878508,
+    "alpha": 0.830986664142977,
+    "beta": -0.014441211736232218
+  },
+  "valid1": {
+    "metadata": {
+      "batch_size": 256,
+      "batches": 4,
+      "dataset_length": 1015,
+      "max_windows": null,
+      "eps": 1e-08,
+      "components": [
+        {
+          "values": [
+            7,
+            1,
+            17420
+          ],
+          "lags": 168,
+          "horizon": 24,
+          "accessible_windows": 1015,
+          "sampled_windows": 1015
+        }
+      ]
+    },
+    "accessible_windows": 1015,
+    "sampled_windows": 1015,
+    "item_windows": 1015,
+    "variate_windows": 1015,
+    "finite_variate_windows": 1015,
+    "invalid_variate_windows": 0,
+    "constant_variate_windows": 0,
+    "lookback_mean": 3.671360213959545,
+    "lookback_std": 2.6305356548774275,
+    "future_mean": 3.700332263788617,
+    "future_std": 2.2813561281266637,
+    "lookback_value_mean": 3.6713602139595514,
+    "lookback_value_std": 4.961158101000554,
+    "lookback_value_min": -21.961000442504883,
+    "lookback_value_max": 20.429000854492188,
+    "future_value_mean": 3.700332263788617,
+    "future_value_std": 2.2813561281266637,
+    "alpha": 0.8735145868728899,
+    "beta": 0.009484760001283074
+  },
+  "test1": {
+    "metadata": {
+      "batch_size": 256,
+      "batches": 4,
+      "dataset_length": 1015,
+      "max_windows": null,
+      "eps": 1e-08,
+      "components": [
+        {
+          "values": [
+            7,
+            1,
+            17420
+          ],
+          "lags": 168,
+          "horizon": 24,
+          "accessible_windows": 1015,
+          "sampled_windows": 1015
+        }
+      ]
+    },
+    "accessible_windows": 1015,
+    "sampled_windows": 1015,
+    "item_windows": 1015,
+    "variate_windows": 1015,
+    "finite_variate_windows": 1015,
+    "invalid_variate_windows": 0,
+    "constant_variate_windows": 0,
+    "lookback_mean": 3.609559358745801,
+    "lookback_std": 3.2396505042719426,
+    "future_mean": 3.60154084536799,
+    "future_std": 2.8548664310901755,
+    "lookback_value_mean": 3.609559358745803,
+    "lookback_value_std": 5.499574783030484,
+    "lookback_value_min": -25.08799934387207,
+    "lookback_value_max": 20.83099937438965,
+    "future_value_mean": 3.60154084536799,
+    "future_value_std": 2.8548664310901755,
+    "alpha": 0.8751971327645826,
+    "beta": 0.02277371423486189
+  }
+}
