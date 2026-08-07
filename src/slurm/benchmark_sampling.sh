@@ -1,6 +1,7 @@
 #!/bin/bash
 # Compare random/individual sampling and batch-size choices.
 set -euo pipefail
+FAMILY=sampling
 source "$(dirname "${BASH_SOURCE[0]}")/benchmark_common.sh"
 OUT_ROOT="$ROOT/outputs/sampling"
 SAMPLING_CASES=()
@@ -40,7 +41,13 @@ run_training() {
         for sampling_case in "${SAMPLING_CASES[@]}"; do
           mode="${sampling_case%%:*}"
           batch="${sampling_case##*:}"
-          run_case scripts.experiment "$dataset" "$setting" "${model}_${mode}_bs${batch}" \
+          MODEL_CONFIG_ORDER=sampling_mode,batch_size
+          MODEL_CONFIG_VALUES=("sampling_mode=$mode" "batch_size=$batch")
+          TABLE_ROW_CONFIG=sampling_mode
+          TABLE_COLUMN_CONFIG=batch_size
+          CASE_DISPLAY_NAME="${model}_${mode}_bs${batch}"
+          CASE_BATCH_SIZE="$batch"
+          run_case scripts.experiment "$dataset" "$setting" "$model" \
             +model.name="$model" +model.path="$model" +normalization.name=instance \
             ++data.sampling.train_idx_mode="$mode" ++training.batch_size="$batch"
         done
@@ -56,10 +63,6 @@ run_tables() {
   done
 }
 
-WORKFLOW_STATE_DIR="$OUT_ROOT/.workflow"
-TABLE_INPUT_NAME=run.complete
-TABLE_STAGE_SIGNATURE="v1|family=sampling|mode=$EXPERIMENT_MODE|datasets=$DATASETS_CSV|settings=$SETTINGS_CSV|models=${MODELS[*]}|seeds=$SEEDS_CSV|cases=${SAMPLING_CASES[*]}"
-TRAIN_STAGE_SIGNATURE="$TABLE_STAGE_SIGNATURE|$COMMON_TRAIN_SIGNATURE"
 TABLE_REQUIRED_OUTPUTS=()
 TABLE_EXPECTED_METHODS=()
 for model in "${MODELS[@]}"; do

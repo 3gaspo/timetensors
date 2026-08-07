@@ -1,6 +1,7 @@
 #!/bin/bash
 # Compare trainable and closed-form linear models and save their coefficients.
 set -euo pipefail
+FAMILY=linear_models
 source "$(dirname "${BASH_SOURCE[0]}")/benchmark_common.sh"
 OUT_ROOT="$ROOT/outputs/linear_models"
 if [ "$EXPERIMENT_MODE" = test ]; then
@@ -22,6 +23,11 @@ done
 run_training() {
   for dataset in "${DATASETS[@]}"; do
     for setting in "${SETTINGS[@]}"; do
+      MODEL_CONFIG_ORDER=normalization
+      MODEL_CONFIG_VALUES=("normalization=instance")
+      TABLE_ROW_CONFIG=
+      TABLE_COLUMN_CONFIG=normalization
+      CASE_DISPLAY_NAME=persistence
       run_case scripts.experiment "$dataset" "$setting" persistence \
         +model.name=persistence +model.path=persistence +normalization.name=instance \
         ++training.epochs=0 +experiment.plot_weights=true
@@ -29,12 +35,22 @@ run_training() {
         for norm in "${LINEAR_NORMS[@]}"; do
           name="${method}_${norm}"
           if [ "$method" = sklinear ]; then
-            run_case scripts.train_sklearn "$dataset" "$setting" "$name" \
+            MODEL_CONFIG_ORDER=normalization
+            MODEL_CONFIG_VALUES=("normalization=$norm")
+            TABLE_ROW_CONFIG=
+            TABLE_COLUMN_CONFIG=normalization
+            CASE_DISPLAY_NAME="$name"
+            run_case scripts.train_sklearn "$dataset" "$setting" "$method" \
               +model.name=sklinear +normalization.name="$norm" \
               +sklearn.unroll_mode=accessible +sklearn.eval_unroll_mode=accessible \
               +experiment.plot_weights=true
           else
-            run_case scripts.experiment "$dataset" "$setting" "$name" \
+            MODEL_CONFIG_ORDER=normalization
+            MODEL_CONFIG_VALUES=("normalization=$norm")
+            TABLE_ROW_CONFIG=
+            TABLE_COLUMN_CONFIG=normalization
+            CASE_DISPLAY_NAME="$name"
+            run_case scripts.experiment "$dataset" "$setting" "$method" \
               +model.name="$method" +model.path="$method" +normalization.name="$norm" \
               +experiment.plot_weights=true
           fi
@@ -48,10 +64,6 @@ run_tables() {
   write_table combined mse "$(IFS=,; echo "${METHODS[*]}")"
 }
 
-WORKFLOW_STATE_DIR="$OUT_ROOT/.workflow"
-TABLE_INPUT_NAME=run.complete
-TABLE_STAGE_SIGNATURE="v1|family=linear_models|mode=$EXPERIMENT_MODE|datasets=$DATASETS_CSV|settings=$SETTINGS_CSV|seeds=$SEEDS_CSV|methods=${LINEAR_METHODS[*]}|norms=${LINEAR_NORMS[*]}"
-TRAIN_STAGE_SIGNATURE="$TABLE_STAGE_SIGNATURE|$COMMON_TRAIN_SIGNATURE"
 TABLE_REQUIRED_OUTPUTS=("$OUT_ROOT/results_combined_mse.tex")
 TABLE_EXPECTED_METHODS=("${METHODS[@]}")
 log_section "workflow start family=linear_models mode=$EXPERIMENT_MODE stages=$STAGES_SPEC"

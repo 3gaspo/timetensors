@@ -48,6 +48,14 @@ REBUILD_DATASETS="${REBUILD_DATASETS:-false}"
 EXPERIMENT_MODE="${EXPERIMENT_MODE:-test}"
 STAGES_SPEC="${STAGES:-train,tables}"
 SKIP_COMPLETED="${SKIP_COMPLETED:-true}"
+RUN_CONFLICT_POLICY="${RUN_CONFLICT_POLICY:-overwrite_exact}"
+FORCE_RUN="${FORCE_RUN:-false}"
+TABLE_CONFIG_POLICY="${TABLE_CONFIG_POLICY:-distinct}"
+TABLE_REPEAT_POLICY="${TABLE_REPEAT_POLICY:-selected}"
+if [ "$EXPERIMENT_MODE" = test ]; then TABLE_PURPOSE="${TABLE_PURPOSE:-smoke}"; else TABLE_PURPOSE="${TABLE_PURPOSE:-publication}"; fi
+EXPERIMENT_LAUNCH_ID="${EXPERIMENT_LAUNCH_ID:-${SLURM_JOB_ID:-manual_$(date -u '+%Y%m%dT%H%M%SZ')_$$}}"
+export EXPERIMENT_LAUNCH_ID
+trap 'status=$?; if [ "$status" -ne 0 ]; then python -m experiment_runs interrupt-launch --root "$ROOT/outputs" --launch-id "$EXPERIMENT_LAUNCH_ID" || true; fi' EXIT
 
 case "$EXPERIMENT_MODE" in
   test)
@@ -107,8 +115,7 @@ for stage in "${STAGE_LIST[@]}"; do
   esac
 done
 
-log_section "benchmark workflow profile=$EXPERIMENT_MODE stages=$STAGES_SPEC skip_completed=$SKIP_COMPLETED datasets=$DATASETS_CSV settings=$SETTINGS_CSV models=${MODELS[*]} seeds=$SEEDS_CSV data_root=$DATA_ROOT weights_root=$WEIGHTS_ROOT train_sampling=$TRAIN_MODE batch_size=$BS learning_rate=$LR epochs=$EPOCHS valid_eval_frequency=$VALID_EVAL_FREQ logging_frequency=$LOGGING_EVAL_FREQ drop_train_constant_users=$DROP_TRAIN_CONSTANT_USERS drop_eval_constant_users=$DROP_EVAL_CONSTANT_USERS"
-COMMON_TRAIN_SIGNATURE="mode=$EXPERIMENT_MODE|datasets=$DATASETS_CSV|settings=$SETTINGS_CSV|models=${MODELS[*]}|seeds=$SEEDS_CSV|train_mode=$TRAIN_MODE|batch_size=$BS|learning_rate=$LR|epochs=$EPOCHS|valid_eval_freq=$VALID_EVAL_FREQ|logging_eval_freq=$LOGGING_EVAL_FREQ|drop_train_constant_users=$DROP_TRAIN_CONSTANT_USERS|drop_eval_constant_users=$DROP_EVAL_CONSTANT_USERS"
+log_section "benchmark workflow mode=$EXPERIMENT_MODE stages=$STAGES_SPEC skip_completed=$SKIP_COMPLETED datasets=$DATASETS_CSV settings=$SETTINGS_CSV models=${MODELS[*]} seeds=$SEEDS_CSV data_root=$DATA_ROOT weights_root=$WEIGHTS_ROOT train_sampling=$TRAIN_MODE batch_size=$BS learning_rate=$LR epochs=$EPOCHS valid_eval_frequency=$VALID_EVAL_FREQ logging_frequency=$LOGGING_EVAL_FREQ drop_train_constant_users=$DROP_TRAIN_CONSTANT_USERS drop_eval_constant_users=$DROP_EVAL_CONSTANT_USERS"
 
 resolve_dataset_root() {
   local dataset="$1" candidate
@@ -148,30 +155,59 @@ dataset_has_tensor_payload() {
 }
 
 run_case() {
-  local module="$1" dataset="$2" setting="$3" method="$4"
+  local module="$1" dataset="$2" setting="$3" backbone="$4"
   shift 4
   local lags="${setting%%:*}" horizon="${setting##*:}"
-  local case_data_root config_path signature seed seed_root run_seeds_csv
-  local -a pending_seeds
+  local case_data_root config_path seed seed_root run_seeds_csv identity_root pair value
+  local run_dir run_action run_signature purpose effective_batch
+  local -a allocation_args pending_seeds required_artifacts
+  : "${FAMILY:?family launcher must set FAMILY}"
+  : "${MODEL_CONFIG_ORDER:=}"
+  : "${TABLE_ROW_CONFIG:=}"
+  : "${TABLE_COLUMN_CONFIG:=}"
+  : "${CASE_DISPLAY_NAME:=$backbone}"
+  effective_batch="${CASE_BATCH_SIZE:-$BS}"
   case_data_root="$(resolve_dataset_root "$dataset")"
   config_path="$case_data_root/$dataset/config.json"
-  signature="v1|module=$module|dataset=$dataset|lags=$lags|horizon=$horizon|method=$method|train_mode=$TRAIN_MODE|batch_size=$BS|learning_rate=$LR|epochs=$EPOCHS|valid_eval_freq=$VALID_EVAL_FREQ|logging_eval_freq=$LOGGING_EVAL_FREQ|drop_train_constant_users=$DROP_TRAIN_CONSTANT_USERS|drop_eval_constant_users=$DROP_EVAL_CONSTANT_USERS|overrides=$*"
-  pending_seeds=()
-  for seed in "${SEEDS[@]}"; do
-    seed_root="$OUT_ROOT/$dataset/${lags}_${horizon}/$method/seed_$seed"
-    if [ "$SKIP_COMPLETED" != true ] ||
-      [ ! -s "$seed_root/all_losses.pt" ] ||
-      [ ! -s "$seed_root/run.complete" ] ||
-      [ "$(head -n 1 "$seed_root/run.complete" 2>/dev/null || true)" != "$signature|seed=$seed" ] ||
-      { [ -f "$config_path" ] && [ "$config_path" -nt "$seed_root/all_losses.pt" ]; }; then
-      pending_seeds+=("$seed")
-    fi
+  identity_root="$OUT_ROOT/$dataset/${lags}_${horizon}/${backbone,,}"
+  for pair in "${MODEL_CONFIG_VALUES[@]}"; do
+    value="${pair#*=}"
+    value="${value,,}"
+    identity_root="$identity_root/${value// /-}"
   done
-  if [ "${#pending_seeds[@]}" -eq 0 ]; then
-    log "skip complete dataset=$dataset lags=$lags horizon=$horizon method=$method seeds=$SEEDS_CSV"
+  if [ "$EXPERIMENT_MODE" = test ]; then purpose=smoke; else purpose=publication; fi
+  allocation_args=(
+    --identity-root "$identity_root" --project timetensors --workflow "$FAMILY"
+    --dataset "$dataset" --lookback "$lags" --horizon "$horizon" --backbone "$backbone"
+    --model-config-order "$MODEL_CONFIG_ORDER" --purpose "$purpose" --mode "$EXPERIMENT_MODE"
+    --display-name "$CASE_DISPLAY_NAME" --row-config "$TABLE_ROW_CONFIG" --column-config "$TABLE_COLUMN_CONFIG"
+    --pipeline-config "entrypoint=$module" --pipeline-config "data.date_splits=0.6,0.2,0.2"
+    --pipeline-config "data.train_idx_mode=$TRAIN_MODE" --pipeline-config "data.eval_idx_mode=all"
+    --pipeline-config "data.train_stride=1" --pipeline-config "data.eval_stride=$horizon"
+    --pipeline-config "data.drop_train_constant_users=$DROP_TRAIN_CONSTANT_USERS"
+    --pipeline-config "data.drop_eval_constant_users=$DROP_EVAL_CONSTANT_USERS"
+    --pipeline-config "training.batch_size=$effective_batch" --pipeline-config "training.learning_rate=$LR"
+    --pipeline-config "training.epochs=$EPOCHS" --pipeline-config "training.valid_eval_freq=$VALID_EVAL_FREQ"
+    --pipeline-config "training.logging_eval_freq=$LOGGING_EVAL_FREQ" --pipeline-config "hydra_overrides=$*"
+    --runtime-config "training.device=gpu" --runtime-config "slurm.job_id=${SLURM_JOB_ID:-}"
+    --project-root "$ROOT" --policy "$RUN_CONFLICT_POLICY" --skip-completed "$SKIP_COMPLETED"
+    --force "$FORCE_RUN" --launch-id "$EXPERIMENT_LAUNCH_ID"
+  )
+  for pair in "${MODEL_CONFIG_VALUES[@]}"; do allocation_args+=(--model-config "$pair"); done
+  for seed in "${SEEDS[@]}"; do allocation_args+=(--seed "$seed"); done
+  if [ -f "$config_path" ]; then allocation_args+=(--input "dataset_config=$config_path"); fi
+  if [ -n "${RUN_INDEX:-}" ]; then allocation_args+=(--run-index "$RUN_INDEX"); fi
+  IFS=$'\t' read -r run_dir run_action run_signature < <(python -m experiment_runs allocate "${allocation_args[@]}")
+  if [ "$run_action" = skip ]; then
+    log "skip complete dataset=$dataset lags=$lags horizon=$horizon backbone=$backbone model_configs=${MODEL_CONFIG_VALUES[*]:-none} run=$run_dir"
     return
   fi
-  run_seeds_csv="$(IFS=,; echo "${pending_seeds[*]}")"
+  run_seeds_csv="$(python -m experiment_runs pending-seeds --run-dir "$run_dir")"
+  IFS=, read -ra pending_seeds <<< "$run_seeds_csv"
+  if [ "${#pending_seeds[@]}" -eq 0 ] || [ -z "${pending_seeds[0]:-}" ]; then
+    log_error "allocated non-skipped run has no pending seeds: $run_dir"
+    exit 1
+  fi
   local rebuild=false rebuild_reason=not_needed
   if [ -z "${DATASET_BUILT[$dataset]:-}" ]; then
     if [ "$REBUILD_DATASETS" = true ]; then
@@ -189,7 +225,10 @@ run_case() {
   if [ -f "$case_data_root/$dataset/config.json" ]; then
     config_args+=(+data.config_path="$case_data_root/$dataset/config.json")
   fi
-  log_section "configuration dataset=$dataset lags=$lags horizon=$horizon method=$method module=$module requested_seeds=$SEEDS_CSV run_seeds=$run_seeds_csv data_root=$case_data_root train_sampling=$TRAIN_MODE train_stride=1 eval_sampling=all eval_stride=$horizon batch_size=$BS learning_rate=$LR epochs=$EPOCHS rebuild_dataset=$rebuild rebuild_reason=$rebuild_reason overrides=$*"
+  for seed in "${pending_seeds[@]}"; do
+    python -m experiment_runs status --run-dir "$run_dir" --status running --seed "$seed"
+  done
+  log_section "configuration dataset=$dataset lags=$lags horizon=$horizon backbone=$backbone model_configs=${MODEL_CONFIG_VALUES[*]:-none} module=$module requested_seeds=$SEEDS_CSV run_seeds=$run_seeds_csv run=$run_dir computation_signature=$run_signature data_root=$case_data_root train_sampling=$TRAIN_MODE train_stride=1 eval_sampling=all eval_stride=$horizon batch_size=$effective_batch learning_rate=$LR epochs=$EPOCHS rebuild_dataset=$rebuild rebuild_reason=$rebuild_reason overrides=$*"
   srun --ntasks=1 python -m "$module" \
     +data.raw_path="$case_data_root/$dataset" \
     +data.path="$case_data_root/$dataset" \
@@ -204,7 +243,7 @@ run_case() {
     +data.sampling.eval_stride="$horizon" \
     +data.sampling.drop_train_constant_individuals="$DROP_TRAIN_CONSTANT_USERS" \
     +data.sampling.drop_eval_constant_individuals="$DROP_EVAL_CONSTANT_USERS" \
-    +training.batch_size="$BS" \
+    +training.batch_size="$effective_batch" \
     +training.lr="$LR" \
     +training.epochs="$EPOCHS" \
     +training.valid_eval_freq="$VALID_EVAL_FREQ" \
@@ -214,49 +253,44 @@ run_case() {
     +experiment.rebuild_dataset="$rebuild" \
     +experiment.recompute_stats=true \
     +experiment.seeds="[$run_seeds_csv]" \
-    +output.dir="$OUT_ROOT/$dataset/${lags}_${horizon}" \
-    +output.name="$method" \
+    +output.dir="$run_dir" \
+    +output.name= \
     "$@" \
-    hydra.run.dir="$OUT_ROOT/hydra/$dataset/${lags}_${horizon}/$method/${SLURM_JOB_ID:-local}"
+    hydra.run.dir="$run_dir/hydra/$EXPERIMENT_LAUNCH_ID"
+  required_artifacts=()
   for seed in "${pending_seeds[@]}"; do
-    seed_root="$OUT_ROOT/$dataset/${lags}_${horizon}/$method/seed_$seed"
+    seed_root="$run_dir/seed_$seed"
     if [ ! -s "$seed_root/all_losses.pt" ]; then
       log_error "training completed without required result $seed_root/all_losses.pt"
       exit 1
     fi
-    printf '%s\n' "$signature|seed=$seed" > "$seed_root/run.complete"
+    python -m experiment_runs status --run-dir "$run_dir" --status completed --seed "$seed" --artifact "seed_$seed/all_losses.pt"
   done
+  for seed in "${SEEDS[@]}"; do required_artifacts+=(--artifact "seed_$seed/all_losses.pt"); done
+  python -m experiment_runs status --run-dir "$run_dir" --status completed "${required_artifacts[@]}"
+  unset CASE_BATCH_SIZE CASE_DISPLAY_NAME
+  MODEL_CONFIG_VALUES=()
 }
 
 write_table() {
   local model="$1" metric="$2" methods="$3"
+  local pair
+  local -a table_args
   log_section "table model=$model metric=$metric methods=$methods output=$OUT_ROOT/results_${model}_${metric}.tex"
-  srun --ntasks=1 python -m visu.results_table "$OUT_ROOT" \
-    --split test1 --metric "$metric" \
-    --datasets "$DATASETS_CSV" --settings "$SETTINGS_CSV" \
-    --methods "$methods" --show-std \
+  table_args=(
+    "$OUT_ROOT" --split test1 --metric "$metric"
+    --datasets "$DATASETS_CSV" --settings "$SETTINGS_CSV"
+    --methods "$methods" --show-std
+    --config-policy "$TABLE_CONFIG_POLICY" --repeat-policy "$TABLE_REPEAT_POLICY"
     --output "$OUT_ROOT/results_${model}_${metric}.tex"
+  )
+  if [ -n "${TABLE_PIPELINE_CONFIGS:-}" ]; then
+    for pair in ${TABLE_PIPELINE_CONFIGS}; do table_args+=(--pipeline-config "$pair"); done
+  fi
+  if [ -n "${TABLE_PURPOSE:-}" ]; then table_args+=(--purpose "$TABLE_PURPOSE"); fi
+  srun --ntasks=1 python -m visu.results_table "${table_args[@]}"
 }
 
 verify_table_inputs() {
-  local dataset case_data_root config_path setting lags horizon method seed seed_root
-  for dataset in "${DATASETS[@]}"; do
-    case_data_root="$(resolve_dataset_root "$dataset")"
-    config_path="$case_data_root/$dataset/config.json"
-    for setting in "${SETTINGS[@]}"; do
-      lags="${setting%%:*}"
-      horizon="${setting##*:}"
-      for method in "${TABLE_EXPECTED_METHODS[@]}"; do
-        for seed in "${SEEDS[@]}"; do
-          seed_root="$OUT_ROOT/$dataset/${lags}_${horizon}/$method/seed_$seed"
-          if [ ! -s "$seed_root/all_losses.pt" ] || [ ! -s "$seed_root/run.complete" ] ||
-            { [ -f "$config_path" ] && [ "$config_path" -nt "$seed_root/all_losses.pt" ]; }; then
-            log_error "missing completed input $seed_root"
-            return 1
-          fi
-        done
-      done
-    done
-  done
-  return 0
+  find "$OUT_ROOT" -type f -name manifest.json -not -path '*/archive/*' -print -quit | grep -q .
 }

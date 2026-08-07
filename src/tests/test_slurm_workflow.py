@@ -43,12 +43,15 @@ class SlurmWorkflowTest(unittest.TestCase):
         self.assertNotIn('SEEDS_OVERRIDE:-1 2 3 4 5}', common)
         self.assertEqual(common.count('MODELS_OVERRIDE:-patchtst}'), 2)
         self.assertIn('MODELS_OVERRIDE:-patchtst dlinear}', common)
-        self.assertIn("run.complete", common)
+        self.assertNotIn("run.complete", common)
+        self.assertIn("python -m experiment_runs allocate", common)
+        self.assertIn("python -m experiment_runs pending-seeds", common)
+        self.assertIn("python -m experiment_runs status", common)
         self.assertIn("dataset_has_tensor_payload", common)
         self.assertIn("missing_tensor_payload", common)
         self.assertNotIn("BENCHMARK_PROFILE", common)
         table_stage = (ROOT / "src/slurm/stage_tables.sh").read_text(encoding="utf-8")
-        self.assertIn("tables.complete", table_stage)
+        self.assertNotIn("tables.complete", table_stage)
         self.assertTrue((ROOT / "src/slurm/stage_train.sh").is_file())
 
     def test_constants_policy_contract(self):

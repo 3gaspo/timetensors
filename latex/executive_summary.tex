@@ -1,0 +1,150 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern,microtype}
+\usepackage[margin=18mm]{geometry}
+\usepackage{booktabs,tabularx,array,xcolor,caption,fancyhdr,hyperref}
+\definecolor{navy}{HTML}{17365D}
+\definecolor{green}{HTML}{047857}
+\definecolor{amber}{HTML}{A05A00}
+\definecolor{blue}{HTML}{2563A6}
+\definecolor{lightblue}{HTML}{EAF2FA}
+\hypersetup{colorlinks=true,linkcolor=navy,urlcolor=navy}
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\scriptsize\color{navy}\textbf{TimeTensors forecasting benchmark}}
+\rhead{\scriptsize\color{gray}Archived results through 7 August 2026}
+\cfoot{\scriptsize\color{gray}\thepage}
+\renewcommand{\headrulewidth}{0.3pt}
+\setlength{\headheight}{13pt}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{4pt}
+\captionsetup{font=small,labelfont={bf,color=navy},skip=3pt}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\sectionbar}[1]{\vspace{2pt}{\large\bfseries\color{navy}#1}\par\vspace{2pt}\color{black}}
+\newcommand{\callout}[1]{\colorbox{lightblue}{\parbox{0.96\linewidth}{\small\raggedright #1}}}
+
+\begin{document}
+{\huge\bfseries\color{navy}TimeTensors forecasting benchmark}\par
+{\Large\color{blue}Executive summary of archived evidence}\par
+\vspace{5pt}
+
+\callout{\textbf{Decision.} The fetched pre-schema commit contains a partial
+full constants-family run, not two completed experiment families. It preserves
+132 completed seed markers and criterion curves, but no synchronized metric
+payload from which a full policy ranking can be rebuilt. No sampling-family
+artifact is present in commit \code{99b4d80}.}
+
+\sectionbar{Imported full-run coverage}
+\begin{table}[h]
+\centering\small
+\begin{tabularx}{\linewidth}{@{}Yrrr@{}}
+\toprule
+\textbf{Dataset} & \textbf{Completed seed runs} & \textbf{Expected} &
+\textbf{Complete method/settings} \\
+\midrule
+ETTh1 & 45 & 45 & 15 / 15 \\
+Electricity & 45 & 45 & 15 / 15 \\
+Traffic & 42 & 45 & 14 / 15 \\
+Solar & 0 & 45 & 0 / 15 \\
+Weather & 0 & 45 & 0 / 15 \\
+Exchange Rate & 0 & 45 & 0 / 15 \\
+\midrule
+\textbf{Total} & \textbf{132} & \textbf{270} & \textbf{44 / 90} \\
+\bottomrule
+\end{tabularx}
+\caption{Coverage of the intended constants grid: six datasets, three
+$(L,H)$ settings, five policies, and three seeds. Job 42527 stopped with an
+out-of-memory error while starting Traffic $504{:}168$
+\code{drop_all_users}, seed 1.}
+\label{tab:coverage}
+\end{table}
+
+\begin{table}[h]
+\centering\small
+\begin{tabularx}{\linewidth}{@{}Yrr@{}}
+\toprule
+\textbf{Archived object} & \textbf{Count} & \textbf{Supports ranking?} \\
+\midrule
+\code{run.complete} signatures & 132 & completion only \\
+Criterion-curve PDFs & 132 & optimization diagnostic only \\
+\code{all_losses.pt} / \code{results.json} metrics & 0 & no \\
+Full constants result tables & 0 & no \\
+Fetched Slurm log pair & 2 files & failure/progress audit \\
+Sampling-family files & 0 & no \\
+\bottomrule
+\end{tabularx}
+\caption{The Git artifact policy excluded the tensor metrics required by the
+legacy table builder. Consequently the partial full run cannot answer which
+constant-handling policy is best, even for its 44 complete configurations.}
+\label{tab:payload}
+\end{table}
+
+\sectionbar{Completed cluster smoke result}
+\begin{table}[h]
+\centering\small
+\begin{tabularx}{\linewidth}{@{}Yrr@{}}
+\toprule
+\textbf{Electricity $504{:}168$, seed 1, 20 steps} & \textbf{Test MSE} &
+\textbf{Constant windows} \\
+\midrule
+Keep all windows & 1.16 & 0 \\
+Remove all constant windows & 1.16 & 0 \\
+Drop all affected users & 1.16 & 0 \\
+\bottomrule
+\end{tabularx}
+\caption{Job 42510 validates the workflow but cannot distinguish policies:
+all 312 retained users have zero constant train, validation, and test windows.}
+\end{table}
+
+\newpage
+\sectionbar{Synthetic diagnostic retained before deletion}
+\begin{table}[h]
+\centering\small
+\begin{tabularx}{\linewidth}{@{}YrrY@{}}
+\toprule
+\textbf{Family} & \textbf{Best observed MSE} & \textbf{Comparator} &
+\textbf{Measured toy result} \\
+\midrule
+Sampling & 23.69 & individual, batch 64 & best sampled configuration \\
+Linear models & 23.39 & least squares/ridge & beats trained linear Adam \\
+Central/per-user & 24.07 & 25.89 & central pooling lower by 1.82 \\
+Losses & 27.06 & MSE & best toy loss \\
+\bottomrule
+\end{tabularx}
+\caption{Generator-specific 16-user, 360-date, $L=24$, $H=6$ smoke with two
+seeds and six epochs. These values validate implementation branches and are not
+PatchTST or real-dataset evidence.}
+\end{table}
+
+\sectionbar{What is known and unknown}
+\begin{tabularx}{\linewidth}{@{}p{37mm}Y@{}}
+\toprule
+\textbf{Question} & \textbf{Quantitative answer} \\
+\midrule
+Did the full constants family complete? & No: 132/270 seed runs and 44/90
+method/settings completed (Table~\ref{tab:coverage}). \\
+Can constants policies be ranked? & No: zero synchronized metric payloads and
+zero full tables (Table~\ref{tab:payload}). \\
+Did the sampling family arrive? & No: zero sampling files in fetched commit
+\code{99b4d80} (Table~\ref{tab:payload}). \\
+Did the test distinguish policies? & No: all three methods have MSE 1.16 and
+zero constant windows (cluster-smoke table). \\
+What survives scientifically? & Only the coverage/failure audit and the toy
+diagnostics quantified above; the real constants comparison must be rerun. \\
+\bottomrule
+\end{tabularx}
+
+\vspace{6pt}
+\callout{\textbf{Archive boundary.} The exact remote tree and log pair are
+stored under
+\code{outputs/archive/legacy_pre_schema_v1_2026-08-07/cluster_full_99b4d80}.
+They are excluded from current manifest readers and cannot conflict with the
+schema-1 \code{outputs/constants} hierarchy.}
+
+\vfill
+{\scriptsize\color{gray}Source: archived commit 99b4d80, its constants tree,
+job 42527 logs, the earlier job 42510 table, and the archived synthetic smoke
+summary. Counts refer to non-empty files in the imported archive.}
+\end{document}

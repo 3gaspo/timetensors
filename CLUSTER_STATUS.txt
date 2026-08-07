@@ -1,14 +1,45 @@
 CLUSTER EXPERIMENT STATUS
-Updated: 2026-08-02
+Updated: 2026-08-07
 
-LATEST COMPLETED JOB
-Run/profile: none recorded
-Artifacts synchronized locally: unknown
-Analyzed locally: unknown
-Analysis note: No cluster-run status was supplied when this file was initialized.
+SCHEMA V1 CUTOVER (CURRENT HANDOFF)
+- Current table-eligible schema-1 runs: none.
+- Pre-schema artifacts are preserved under
+  outputs/archive/legacy_pre_schema_v1_2026-08-07/ and are excluded from
+  current readers.
+- The complete archived analysis is in latex/executive_summary.{tex,pdf}.
 
-CURRENT OR NEXT CLUSTER JOBS
-None recorded.
+LATEST SYNCHRONIZED CLUSTER ARTIFACTS
+- Remote commit: 99b4d80df22999013e254a71cc6c0aa223f3b31f
+  (subject: "ran jobs 01 02 full").
+- Imported without merging old code under
+  outputs/archive/legacy_pre_schema_v1_2026-08-07/cluster_full_99b4d80/.
+- The commit contains outputs/constants plus logs/constants_42527.{out,err}.
+  It contains no outputs/sampling tree and no sampling log.
+- Imported payload: 132 run.complete markers, 132 criterion curves, and the
+  exact archived source tree. No all_losses.pt or results.json metric payload
+  was synchronized.
+
+LATEST CLUSTER RUN ANALYSIS
+- Job 42527 ran the pre-schema EXPERIMENT_MODE=full constants workflow.
+- Completed coverage: 132/270 intended seed runs and 44/90 method/settings.
+  ETTh1 and Electricity are complete; Traffic is complete except
+  504:168/drop_all_users; Solar, Weather, and Exchange Rate were not reached.
+- The run stopped with an out-of-memory error while starting Traffic
+  504:168/drop_all_users seed 1. No full result table was produced, and the
+  missing metric payload prevents reconstructing a policy ranking locally.
+- Earlier job 42510 completed the Electricity 504:168 test slice. All three
+  test policies had MSE 1.16 because the retained users had zero constant
+  windows; this validates the workflow but cannot rank policies.
+
+NEXT JOBS
+1. Run EXPERIMENT_MODE=test sbatch 01_constants.slurm under schema 1.
+2. Rerun EXPERIMENT_MODE=full sbatch 01_constants.slurm under schema 1 after
+   the test passes; inspect memory use for Traffic 504:168/drop_all_users.
+3. Run EXPERIMENT_MODE=full sbatch 02_sampling.slurm only after the constants
+   result is complete and analyzed. No synchronized evidence shows that this
+   family has already run.
 
 MAINTENANCE
-Update this file after submission, completion, artifact synchronization, and analysis.
+Update this file after submission, completion, artifact synchronization, and
+local analysis. Record job IDs and whether metric payloads required by the
+current completion contract were synchronized.

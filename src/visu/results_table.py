@@ -2,10 +2,11 @@
 
 Expected experiment layout::
 
-    EXPERIMENT/DATASET/L_H/METHOD/all_losses.pt
+    EXPERIMENT/DATASET/L_H/BACKBONE/CONFIG.../run_N/seed_N/all_losses.pt
 
-The command discovers the layout recursively, averages the selected loss tensor,
-and writes a complete LaTeX ``table`` environment.
+Only current-schema completed manifests are eligible. The command applies the
+requested run-selection policy, averages the selected loss tensor, and writes a
+complete LaTeX ``table`` environment plus its input manifest.
 """
 
 from __future__ import annotations
@@ -20,6 +21,8 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 import torch
+
+from experiment_runs import ManifestError, SelectedRun, load_manifest, select_identity_runs, write_report_manifest
 
 
 LOGGER = logging.getLogger(__name__)
@@ -53,49 +56,72 @@ def _mean(value: Any) -> float:
     return sum(values) / len(values) if values else math.nan
 
 
-def discover_results(experiment_dir: str | Path) -> list[Result]:
-    """Load all metrics found below ``experiment_dir``."""
+def _discover_results_and_runs(
+    experiment_dir: str | Path,
+    *,
+    pipeline_config: Mapping[str, Any] | None = None,
+    config_policy: str = "distinct",
+    repeat_policy: str = "selected",
+    purposes: Iterable[str] | None = None,
+) -> tuple[list[Result], list[SelectedRun]]:
     root = Path(experiment_dir).expanduser().resolve()
     if not root.is_dir():
         raise FileNotFoundError(f"experiment directory does not exist: {root}")
     results: list[Result] = []
-    for path in sorted(root.rglob("all_losses.pt")):
-        relative = path.relative_to(root)
-        if len(relative.parts) < 4:
+    selected_runs: list[SelectedRun] = []
+    identity_roots = sorted(
+        {path.parent.parent for path in root.rglob("manifest.json") if path.parent.name.startswith("run_") and "archive" not in path.relative_to(root).parts}
+    )
+    for identity_root in identity_roots:
+        manifests = [load_manifest(path) for path in identity_root.glob("run_*/manifest.json")]
+        if not any(manifest["status"] == "completed" for manifest in manifests):
             continue
-        identity = None
-        for index in range(len(relative.parts) - 1, 0, -1):
-            if re.fullmatch(r"\d+[_-]\d+", relative.parts[index]):
-                identity = (relative.parts[index - 1], relative.parts[index], index)
-                break
-        if identity is None:
-            dataset, setting = relative.parts[-4:-2]
-            setting_index = len(relative.parts) - 3
-        else:
-            dataset, setting, setting_index = identity
-        method = relative.parts[setting_index + 1]
-        if "users" in relative.parts[setting_index + 2 : -1]:
-            continue
-        seed = None
-        for part in relative.parts[setting_index + 2 : -1]:
-            match = re.fullmatch(r"seed[_-](\d+)", part)
-            if match:
-                seed = int(match.group(1))
-                break
-        try:
-            payload = torch.load(path, map_location="cpu", weights_only=False)
-        except TypeError:  # Torch < 2.0
-            payload = torch.load(path, map_location="cpu")
-        if not isinstance(payload, Mapping):
-            continue
-        for split, metrics in payload.items():
-            if not isinstance(metrics, Mapping):
-                metrics = {"loss": metrics}
-            for metric, value in metrics.items():
-                results.append(
-                    Result(dataset, setting, method, str(split), str(metric), _mean(value), path, seed)
-                )
-    return results
+        selected = select_identity_runs(
+            identity_root,
+            requested_pipeline=pipeline_config,
+            config_policy=config_policy,
+            repeat_policy=repeat_policy,
+            purposes=purposes,
+        )
+        selected_runs.extend(selected)
+        for choice in selected:
+            identity = choice.manifest["identity"]
+            seed_states = choice.manifest.get("seed_status", {})
+            seeds = [int(seed) for seed, state in seed_states.items() if state.get("status") == "completed"]
+            paths = [(choice.run_dir / f"seed_{seed}" / "all_losses.pt", seed) for seed in seeds]
+            if not paths and (choice.run_dir / "all_losses.pt").is_file():
+                paths = [(choice.run_dir / "all_losses.pt", None)]
+            for path, seed in paths:
+                if not path.is_file():
+                    raise ManifestError(f"completed manifest is missing table input: {path}")
+                try:
+                    payload = torch.load(path, map_location="cpu", weights_only=False)
+                except TypeError:  # Torch < 2.0
+                    payload = torch.load(path, map_location="cpu")
+                if not isinstance(payload, Mapping):
+                    continue
+                for split, metrics in payload.items():
+                    if not isinstance(metrics, Mapping):
+                        metrics = {"loss": metrics}
+                    for metric, value in metrics.items():
+                        results.append(
+                            Result(
+                                str(identity["dataset"]),
+                                f"{identity['lookback']}_{identity['horizon']}",
+                                choice.label,
+                                str(split),
+                                str(metric),
+                                _mean(value),
+                                path,
+                                seed,
+                            )
+                        )
+    return results, selected_runs
+
+
+def discover_results(experiment_dir: str | Path, **kwargs: Any) -> list[Result]:
+    """Load metrics referenced by selected, completed current manifests."""
+    return _discover_results_and_runs(experiment_dir, **kwargs)[0]
 
 
 def _split_names(value: str | Sequence[str] | None) -> list[str] | None:
@@ -252,7 +278,16 @@ def build_table(
             )
         ]
     available_methods = sorted({result.method for result in filtered}, key=str.casefold)
-    method_order = list(methods) if methods else available_methods
+    if methods:
+        method_order = []
+        for requested in methods:
+            matches = [
+                method for method in available_methods
+                if method == requested or method.startswith(f"{requested}__") or method.startswith(f"{requested}_run_")
+            ]
+            method_order.extend(method for method in matches if method not in method_order)
+    else:
+        method_order = available_methods
     method_filter = set(method_order)
     filtered = [result for result in filtered if result.method in method_filter]
     if not filtered:
@@ -357,10 +392,47 @@ def generate_results_table(experiment_dir: str | Path, output: str | Path | None
     root = Path(experiment_dir).expanduser().resolve()
     default_name = f"results_{str(kwargs.get('metric', 'mse')).lower()}.tex"
     destination = Path(output).expanduser().resolve() if output else root / default_name
-    latex = build_table(discover_results(root), **kwargs)
+    selection_keys = {"pipeline_config", "config_policy", "repeat_policy", "purposes"}
+    selection = {key: kwargs.pop(key) for key in list(kwargs) if key in selection_keys}
+    results, selected_runs = _discover_results_and_runs(root, **selection)
+    latex = build_table(results, **kwargs)
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(latex, encoding="utf-8")
+    write_report_manifest(
+        destination.parent / "report_manifest.json",
+        inputs=selected_runs,
+        config_policy=str(selection.get("config_policy", "distinct")),
+        repeat_policy=str(selection.get("repeat_policy", "selected")),
+        filters={
+            "pipeline": dict(selection.get("pipeline_config") or {}),
+            "purposes": sorted(selection.get("purposes") or []),
+            **{key: kwargs.get(key) for key in ("metric", "split", "datasets", "settings", "methods")},
+        },
+    )
     return destination
+
+
+def _value(text: str) -> Any:
+    lowered = text.casefold()
+    if lowered in {"true", "false"}:
+        return lowered == "true"
+    try:
+        return int(text)
+    except ValueError:
+        try:
+            return float(text)
+        except ValueError:
+            return text
+
+
+def _pipeline_pairs(values: Iterable[str]) -> dict[str, Any]:
+    output: dict[str, Any] = {}
+    for item in values:
+        if "=" not in item:
+            raise ValueError(f"pipeline config must be KEY=VALUE, got {item!r}")
+        key, value = item.split("=", 1)
+        output[key] = _value(value)
+    return output
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -384,6 +456,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--scale-exponent", type=int, default=None)
     parser.add_argument("--row-scale", action="append", default=[], metavar="DATASET/L_H=EXPONENT")
     parser.add_argument("--show-std", action="store_true", help="Show standard deviation across seeds")
+    parser.add_argument("--pipeline-config", action="append", default=[], metavar="KEY=VALUE")
+    parser.add_argument("--config-policy", choices=["distinct", "latest", "selected", "average"], default="distinct")
+    parser.add_argument("--repeat-policy", choices=["distinct", "latest", "selected", "average"], default="selected")
+    parser.add_argument("--purpose", action="append", default=[])
     parser.add_argument("--caption", default=None)
     parser.add_argument("--label", default="tab:results")
     args = parser.parse_args(argv)
@@ -419,6 +495,10 @@ def main(argv: Sequence[str] | None = None) -> Path:
         scale_exponent=args.scale_exponent,
         scale_exponents=_parse_scale_exponents(args.row_scale),
         show_std=args.show_std,
+        pipeline_config=_pipeline_pairs(args.pipeline_config),
+        config_policy=args.config_policy,
+        repeat_policy=args.repeat_policy,
+        purposes=args.purpose,
         caption=args.caption,
         label=args.label,
     )

@@ -51,9 +51,9 @@
 \newcommand{\rMSE}{\operatorname{rMSE}}
 \newcommand{\Wten}{\operatorname{W10}}
 
-\title{\vspace{-1.5em}\textbf{TimeTensors: Forecasting Benchmark and Experiments}\vspace{-0.4em}}
+\title{\vspace{-1.5em}\textbf{TimeTensors: Forecasting Benchmark}\\[2mm]\large Experiment Guideline\vspace{-0.4em}}
 \author{Gaspard Berthelier}
-\date{4 August 2026}
+\date{7 August 2026}
 
 \begin{document}
 \maketitle
@@ -145,11 +145,11 @@ user filtering drops a user if any accessible variable-window is constant or
 non-finite. These definitions coincide for the $D=1$ benchmark tensors.
 
 The launcher compares exactly five policies in full and ultra: keep all pairs;
-\code{remove_train_windows}, \code{remove_eval_windows}, or
-\code{remove_all_windows}; and \code{drop_all_users}. Train and evaluation
+\path{remove_train_windows}, \path{remove_eval_windows}, or
+\path{remove_all_windows}; and \path{drop_all_users}. Train and evaluation
 interventions are deliberately separated: train-only filtering tests an
 optimization effect, whereas evaluation filtering changes the measured
-population. Curated source exclusions from each dataset's \code{config.json}
+population. Curated source exclusions from each dataset's \path{config.json}
 are applied before these dynamic policies and are not an experimental factor.
 
 The family uses instance-normalized PatchTST in the full profile and adds
@@ -443,9 +443,38 @@ selected split, together with losses grouped by user, equal-user summaries, and
 W10 summaries. Tables use \code{test1}, average each metric tensor within a
 seed, then report the mean and sample standard deviation across seeds. Each row
 uses an explicit $\times10^m$ scale. Every seed directory contains model,
-history, metadata, loss, and completion artifacts; a signature-matched
-\code{run.complete} permits exact resumption, and tables are regenerated only
-when the selected grid is complete and newer than their workflow marker.
+history, metadata, and loss artifacts.
+
+\subsection{Result identities and manifests}
+Every family continues as
+\code{outputs/family/dataset/L_H/backbone/configs/run_n/seed_n}. The ordered
+model-config folders are: \code{policy} for constants;
+\code{sampling_mode/batch_size} for sampling; \code{normalization} for
+normalizations; \code{loss} for losses; \code{normalization/loss} for the
+reference family; \code{normalization} with the linear method as backbone for
+linear models; and \code{scope} for central/per-user. No synthetic upper/lower
+folder level is required.
+
+Training budget, optimizer, split, strides, and logging/plot controls are
+pipeline configs in \code{manifest.json}; scheduler placement is runtime-only.
+One seed fixes all stochasticity. \code{EXPERIMENT_MODE} selects path subsets
+and is never a phase, family, path component, or computation-signature field.
+
+The current contract uses \code{schema_version: 1} and four states. The default
+\code{overwrite_exact} policy skips exact completion, resumes exact
+interruption, and allocates a new \code{run_n} for changed pipeline config.
+Tables support distinct/latest/selected/average config selection and
+selected/latest/distinct/average repeat selection; explicit pipeline filters
+must match even with one run. \code{SELECTED_RUNS.txt} stores selection and each
+report stores its exact input manifests. Old synchronized outputs lacked the
+loss tensors needed for faithful migration and are isolated under
+\code{outputs/archive/legacy_pre_schema_v1_2026-08-07}.
+
+The synthetic smoke explicitly enumerates every expected method in all seven
+families and requires seeds 1 and 2 for each. Its current run tree is below
+\code{outputs/synthetic_smoke/family/synthetic_smoke/24_6/}
+\code{numpy_linear_proxy/method/run_n/seed_n}; reports use
+\code{outputs/reports/synthetic_smoke}.
 
 \subsection{Main implementation classes}
 

@@ -1,6 +1,7 @@
 #!/bin/bash
 # Establish persistence, PatchTST, and Chronos-2 error references.
 set -euo pipefail
+FAMILY=reference
 source "$(dirname "${BASH_SOURCE[0]}")/benchmark_common.sh"
 OUT_ROOT="$ROOT/outputs/reference"
 read -ra REFERENCE_METHODS <<< "${REFERENCE_METHODS_OVERRIDE:-persistence patchtst chronos2}"
@@ -16,6 +17,11 @@ run_training() {
       for method in "${REFERENCE_METHODS[@]}"; do
         case "$method" in
           persistence)
+            MODEL_CONFIG_ORDER=normalization,loss
+            MODEL_CONFIG_VALUES=("normalization=instance" "loss=none")
+            TABLE_ROW_CONFIG=normalization
+            TABLE_COLUMN_CONFIG=loss
+            CASE_DISPLAY_NAME=persistence
             run_case scripts.experiment "$dataset" "$setting" persistence \
               +model.name=persistence +model.path=persistence +normalization.name=instance \
               ++data.sampling.drop_train_constant_individuals="$REFERENCE_DROP_TRAIN_CONSTANT_USERS" \
@@ -23,6 +29,11 @@ run_training() {
               ++training.epochs=0
             ;;
           patchtst)
+            MODEL_CONFIG_ORDER=normalization,loss
+            MODEL_CONFIG_VALUES=("normalization=$REFERENCE_PATCHTST_NORM" "loss=$REFERENCE_LOSS")
+            TABLE_ROW_CONFIG=normalization
+            TABLE_COLUMN_CONFIG=loss
+            CASE_DISPLAY_NAME=patchtst
             run_case scripts.experiment "$dataset" "$setting" patchtst \
               +model.name=patchtst +model.path=patchtst +normalization.name="$REFERENCE_PATCHTST_NORM" \
               +training.loss="$REFERENCE_LOSS" \
@@ -30,6 +41,11 @@ run_training() {
               ++data.sampling.drop_eval_constant_individuals="$REFERENCE_DROP_EVAL_CONSTANT_USERS"
             ;;
           chronos2)
+            MODEL_CONFIG_ORDER=normalization,loss
+            MODEL_CONFIG_VALUES=("normalization=identity" "loss=none")
+            TABLE_ROW_CONFIG=normalization
+            TABLE_COLUMN_CONFIG=loss
+            CASE_DISPLAY_NAME=chronos2
             run_case scripts.experiment "$dataset" "$setting" chronos2 \
               +model.name=chronos +model.path=chronos +normalization.name=identity \
               +model.kwargs.weights_path="$CHRONOS_WEIGHTS_PATH" \
@@ -53,10 +69,6 @@ run_tables() {
   write_table combined w10_mse "$METHOD_ARG"
 }
 
-WORKFLOW_STATE_DIR="$OUT_ROOT/.workflow"
-TABLE_INPUT_NAME=run.complete
-TABLE_STAGE_SIGNATURE="v1|family=reference|mode=$EXPERIMENT_MODE|datasets=$DATASETS_CSV|settings=$SETTINGS_CSV|seeds=$SEEDS_CSV|methods=${REFERENCE_METHODS[*]}|patchtst_norm=$REFERENCE_PATCHTST_NORM|loss=$REFERENCE_LOSS|drop_train_constant_users=$REFERENCE_DROP_TRAIN_CONSTANT_USERS|drop_eval_constant_users=$REFERENCE_DROP_EVAL_CONSTANT_USERS"
-TRAIN_STAGE_SIGNATURE="$TABLE_STAGE_SIGNATURE|$COMMON_TRAIN_SIGNATURE"
 TABLE_REQUIRED_OUTPUTS=("$OUT_ROOT/results_combined_mse.tex" "$OUT_ROOT/results_combined_w10_mse.tex")
 TABLE_EXPECTED_METHODS=("${REFERENCE_METHODS[@]}")
 log_section "workflow start family=reference mode=$EXPERIMENT_MODE stages=$STAGES_SPEC"

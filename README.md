@@ -32,7 +32,7 @@ python -m scripts.load_dataset     # dataset stage only
 python -m scripts.train            # PyTorch training only
 python -m scripts.evaluate         # evaluation only
 python -m scripts.train_sklearn    # sklearn linear regression
-python -m visu.results_table outputs/results --show-std
+python -m visu.results_table outputs/reference --show-std
 ```
 
 Hydra accepts the experiment sections `data`, `task`, `model`, `normalization`, `training`, `evaluation`, `experiment`, and `output`. A typical run is:
@@ -46,10 +46,12 @@ python -m scripts.experiment \
   +training.lr=1e-5 +training.batch_size=256 +training.epochs=10000 \
   +training.valid_eval_freq=1000 +training.logging_eval_freq=1000 \
   +experiment.seeds='[1,2,3]' \
-  +output.dir=outputs/results/electricity/168_24 +output.name=patchtst
+  +output.dir=outputs/manual_debug/electricity/168_24 +output.name=patchtst
 ```
 
 `experiment.seeds` creates `seed_N/` subdirectories. The first seed may rebuild the tensor dataset; later seeds reuse it. Training history stores raw optimizer-step losses, interval-average train losses, and validation losses at `training.valid_eval_freq`. Set `training.plot_step_train_loss=false` for the clearer interval-train/validation plot.
+This direct Hydra command is for debugging; table-eligible runs must be
+allocated by a manifest-aware numbered Slurm workflow.
 
 ## Experiment controls
 
@@ -148,16 +150,52 @@ include `POLICIES_OVERRIDE`, `SAMPLING_CASES_OVERRIDE` (space-separated
 `BATCH_SIZES_OVERRIDE`, `LOSSES_OVERRIDE`, `NORMS_OVERRIDE`,
 `LINEAR_METHODS_OVERRIDE`, and `LINEAR_NORMS_OVERRIDE`.
 
-The full front runs `STAGES=train,tables`. The training stage writes one
-signature-matched `run.complete` beside each seed's `all_losses.pt` and a
-grid-level `.workflow/train.complete`; it skips only exact completed work. The table stage first requires every
-selected dataset/setting/method/seed, then writes
-`.workflow/tables.complete`; it is skipped when its signature still matches and
-no training completion marker is newer. Outputs created before this completion
-contract must be rerun once. `STAGES=train` and `STAGES=tables` are recovery
-overrides, while `SKIP_COMPLETED=false` forces selected work. Resubmitting the
-same complete front is therefore the normal recovery procedure after a time
-limit.
+The full front runs `STAGES=train,tables`. Training allocates current-manifest
+runs and executes only incomplete seeds; tables are lightweight and are rebuilt
+from the selected completed manifests. `STAGES=train` and `STAGES=tables` are
+recovery overrides, while `SKIP_COMPLETED=false` forces the exact selected
+computation and retains its previous manifest. Resubmitting the same complete
+front is therefore the normal recovery procedure after a time limit.
+
+## Result identity and manifests
+
+Every family has its own workflow root and ordered model configs:
+
+| Root | Backbone | Ordered model-config folders |
+|---|---|---|
+| `outputs/constants` | selected forecaster | `policy` |
+| `outputs/sampling` | selected forecaster | `sampling_mode/batch_size` |
+| `outputs/normalizations` | selected forecaster | `normalization` |
+| `outputs/losses` | selected forecaster | `loss` |
+| `outputs/reference` | persistence/PatchTST/Chronos-2 | `normalization/loss` |
+| `outputs/linear_models` | linear method | `normalization` |
+| `outputs/central_per_user` | selected forecaster | `scope` |
+
+Each continues as `dataset/L_H/backbone/<configs>/run_n/seed_n/`. Step budget,
+optimizer, split, strides, plotting cadence, and other scientific execution
+choices are pipeline configs in `manifest.json`; device and scheduler placement
+are runtime configs. One seed fixes all stochasticity in that repetition.
+
+The current `schema_version` is 1. Only completed manifests whose required
+artifacts exist can enter a report. `RUN_CONFLICT_POLICY=overwrite_exact`
+skips identical completed runs, resumes identical interrupted runs, and creates
+the next `run_n` for changed pipeline configs. `overwrite_path` and `new` are
+explicit alternatives. Reports support the common distinct/latest/selected/
+average config policy and selected/latest/distinct/average repeat policy;
+explicit pipeline filters must match even with one candidate. Selection is
+recorded in `SELECTED_RUNS.txt`, and every report writes `report_manifest.json`.
+
+The former result trees could not be migrated because synchronized seed folders
+lacked the excluded `all_losses.pt` payloads required to prove completion. They
+are preserved under `outputs/archive/legacy_pre_schema_v1_2026-08-07/` and are
+never consumed by current tables.
+
+The later remote commit `99b4d80` was imported without merging its pre-schema
+code under the commit-addressed `cluster_full_99b4d80/` archive directory. It
+contains a partial full constants run (132 of 270 intended seed runs) and the
+job-42527 log pair, but no sampling-family tree and no synchronized metric
+payload from which to rebuild a policy table. The quantitative coverage and
+failure analysis is retained in `latex/executive_summary.tex`.
 
 The recommended execution order is:
 
@@ -213,7 +251,7 @@ linear-model and reference comparisons intentionally use combined tables.
 Tables aggregate seed means and sample standard deviations, display values with
 two decimals, and include an explicit per-row `\times 10^{m}` multiplier. A
 single-seed test cell is valid but has no estimable sample deviation, so it is
-shown without `±`. See `latex/benchmark_experiments.tex` for the complete
+shown without `±`. See `latex/experiment_guideline.tex` for the complete
 protocol.
 
 All benchmark launchers use the `h100` partition, one CPU per task, concise
@@ -233,14 +271,20 @@ python src/tests/test_models.py
 python src/tests/test_results_table.py
 python src/tests/test_sklearn.py
 python src/tests/test_slurm_workflow.py
+python src/tests/test_synthetic_smoke.py
 ```
 
 ## Synthetic smoke benchmark
 
 `src/scripts/synthetic_smoke.py` loads the generator definitions and the
 two-cluster population from `archive/synthetic_generator.ipynb`, writes a small
-16-user dataset to `datasets/synthetic_smoke/`, and exercises all six benchmark
-families with a NumPy linear forecaster for six epochs and seeds 1 and 2. It is
+16-user dataset to `datasets/synthetic_smoke/`, and exercises all seven benchmark
+families with NumPy forecasters for six epochs and seeds 1 and 2. Every family
+has an explicit expected-method set, and the smoke test requires every expected
+method to contain both completed seeds. The reference family uses persistence
+plus explicitly named NumPy proxies for PatchTST and Chronos-2; it validates the
+three-method workflow and reporting contract, not
+the numerical behavior of those unavailable backbones. The runner is
 dependency-light and is intended for local end-to-end checks when the PyTorch
 `uv` environment is unavailable.
 
@@ -248,14 +292,15 @@ dependency-light and is intended for local end-to-end checks when the PyTorch
 python src/scripts/synthetic_smoke.py
 ```
 
-Seed-level results, aggregated CSV/Markdown/LaTeX tables, training history, and
-SVG plots are written to `outputs/synthetic_smoke/`. This smoke runner validates
-the experiment controls and reporting path; the Slurm benchmarks remain the
-authoritative DLinear/PatchTST experiments.
+Seed-level manifests and artifacts use
+`outputs/synthetic_smoke/<family>/synthetic_smoke/24_6/numpy_linear_proxy/<method>/run_n/seed_n/`;
+aggregated reports use `outputs/reports/synthetic_smoke/`. This validates every
+family's methods, both seeds, selection, and reporting path; the Slurm
+benchmarks remain the authoritative DLinear/PatchTST experiments.
 
 ## Experiment protocol
 
-`latex/benchmark_experiments.tex` is the single LaTeX source for the forecasting
-task, all seven benchmark families, the shared datasets and settings, and the
-main implementation classes. Its compiled PDF is written to
-`outputs/pdf/benchmark_experiments.pdf`.
+`latex/experiment_guideline.tex` specifies the forecasting task, all seven
+benchmark families, shared datasets and settings, artifact contracts, and
+practical workflow. `latex/executive_summary.tex` records only completed and
+analyzed results. Both compiled PDFs are kept beside their sources.

@@ -1,6 +1,7 @@
 #!/bin/bash
 # Compare input normalization parameterizations under a fixed loss.
 set -euo pipefail
+FAMILY=normalizations
 source "$(dirname "${BASH_SOURCE[0]}")/benchmark_common.sh"
 OUT_ROOT="$ROOT/outputs/normalizations"
 read -ra NORMS <<< "${NORMS_OVERRIDE:-identity standard min-max in-min-max instance revin}"
@@ -10,7 +11,12 @@ run_training() {
     for setting in "${SETTINGS[@]}"; do
       for model in "${MODELS[@]}"; do
         for norm in "${NORMS[@]}"; do
-          run_case scripts.experiment "$dataset" "$setting" "${model}_${norm}" \
+          MODEL_CONFIG_ORDER=normalization
+          MODEL_CONFIG_VALUES=("normalization=$norm")
+          TABLE_ROW_CONFIG=normalization
+          TABLE_COLUMN_CONFIG=
+          CASE_DISPLAY_NAME="${model}_${norm}"
+          run_case scripts.experiment "$dataset" "$setting" "$model" \
             +model.name="$model" +model.path="$model" +normalization.name="$norm" +training.loss=nmse
         done
       done
@@ -25,10 +31,6 @@ run_tables() {
   done
 }
 
-WORKFLOW_STATE_DIR="$OUT_ROOT/.workflow"
-TABLE_INPUT_NAME=run.complete
-TABLE_STAGE_SIGNATURE="v1|family=normalizations|mode=$EXPERIMENT_MODE|datasets=$DATASETS_CSV|settings=$SETTINGS_CSV|models=${MODELS[*]}|seeds=$SEEDS_CSV|norms=${NORMS[*]}"
-TRAIN_STAGE_SIGNATURE="$TABLE_STAGE_SIGNATURE|$COMMON_TRAIN_SIGNATURE"
 TABLE_REQUIRED_OUTPUTS=()
 TABLE_EXPECTED_METHODS=()
 for model in "${MODELS[@]}"; do

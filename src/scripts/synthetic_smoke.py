@@ -20,11 +20,40 @@ from typing import Any, Dict, List, Union
 import numpy as np
 import pandas as pd
 
+from experiment_runs import (
+    SelectedRun,
+    allocate_run,
+    identity_path,
+    input_record,
+    load_manifest,
+    mark_status,
+    source_signature,
+    write_report_manifest,
+)
+
 
 SEEDS = (1, 2)
 LAGS = 24
 HORIZON = 6
 EPOCHS = 6
+BENCHMARK_FAMILIES = (
+    "constants",
+    "sampling",
+    "normalizations",
+    "reference",
+    "losses",
+    "linear_models",
+    "central_per_user",
+)
+EXPECTED_METHODS = {
+    "constants": {"keep", "remove_train_windows", "remove_eval_windows", "remove_all_windows", "drop_all_users"},
+    "sampling": {f"{mode}_bs{batch}" for mode in ("random", "dates", "individuals", "all") for batch in (16, 64)},
+    "normalizations": {"identity", "standard", "min-max", "in-min-max", "instance", "revin"},
+    "reference": {"persistence", "patchtst_proxy", "chronos2_proxy"},
+    "losses": {"mse", "mae", "nmse", "nmae", "relative_mse"},
+    "linear_models": {"persistence", "periodic", "linear_adam", "numpy_lstsq", "ridge"},
+    "central_per_user": {"central", "per_user"},
+}
 
 
 @dataclass
@@ -351,6 +380,49 @@ def run_benchmark(values: np.ndarray) -> tuple[pd.DataFrame, pd.DataFrame]:
             result, history, n_train = trained_run(train, valid, test, seed=seed, normalization=normalization, loss="nmse")
             add_result(rows, "normalizations", normalization, seed, result, n_train, len(test.x))
 
+    # The publication reference family compares persistence, PatchTST, and
+    # Chronos-2. Keep this smoke dependency-light by exercising the same
+    # three-column reporting contract with explicit NumPy proxies for the two
+    # unavailable backbones.
+    for seed in SEEDS:
+        persistence = np.repeat(test.x[:, -1:], HORIZON, axis=1)
+        add_result(
+            rows,
+            "reference",
+            "persistence",
+            seed,
+            metrics(persistence, test),
+            len(train.x),
+            len(test.x),
+        )
+        patchtst_result, _, n_train = trained_run(
+            train,
+            valid,
+            test,
+            seed=seed,
+            normalization="instance",
+            loss="nmse",
+        )
+        add_result(
+            rows,
+            "reference",
+            "patchtst_proxy",
+            seed,
+            patchtst_result,
+            n_train,
+            len(test.x),
+        )
+        chronos2_proxy = test.x[:, :HORIZON]
+        add_result(
+            rows,
+            "reference",
+            "chronos2_proxy",
+            seed,
+            metrics(chronos2_proxy, test),
+            len(train.x),
+            len(test.x),
+        )
+
     for seed in SEEDS:
         persistence = np.repeat(test.x[:, -1:], HORIZON, axis=1)
         add_result(rows, "linear_models", "persistence", seed, metrics(persistence, test), len(train.x), len(test.x))
@@ -386,7 +458,17 @@ def run_benchmark(values: np.ndarray) -> tuple[pd.DataFrame, pd.DataFrame]:
             total_train += len(train_user.x)
         add_result(rows, "central_per_user", "per_user", seed, metrics(prediction, test), total_train, len(test.x))
 
-    return pd.DataFrame(rows), pd.DataFrame(histories)
+    results = pd.DataFrame(rows)
+    observed_families = set(results["family"])
+    expected_families = set(BENCHMARK_FAMILIES)
+    if observed_families != expected_families:
+        missing = sorted(expected_families - observed_families)
+        unexpected = sorted(observed_families - expected_families)
+        raise RuntimeError(
+            f"synthetic benchmark family mismatch: missing={missing}, "
+            f"unexpected={unexpected}"
+        )
+    return results, pd.DataFrame(histories)
 
 
 def aggregate(results: pd.DataFrame) -> pd.DataFrame:
@@ -402,6 +484,66 @@ def aggregate(results: pd.DataFrame) -> pd.DataFrame:
         )
         .reset_index()
     )
+
+
+def write_manifest_runs(results: pd.DataFrame, project: Path) -> list[SelectedRun]:
+    """Persist the synthetic smoke matrix through the current run contract."""
+    selected: list[SelectedRun] = []
+    code = source_signature(project)
+    dataset_config = project / "datasets" / "synthetic_smoke" / "config.json"
+    for (family, method), frame in results.groupby(["family", "method"], sort=False):
+        root = identity_path(
+            project / "outputs" / "synthetic_smoke" / family,
+            "synthetic_smoke",
+            LAGS,
+            HORIZON,
+            "numpy_linear_proxy",
+            ["method"],
+            {"method": method},
+        )
+        allocation = allocate_run(
+            root,
+            project="timetensors",
+            workflow=f"synthetic_smoke/{family}",
+            dataset="synthetic_smoke",
+            lookback=LAGS,
+            horizon=HORIZON,
+            backbone="numpy_linear_proxy",
+            model_config_order=["method"],
+            model_config={"method": method},
+            pipeline_config={
+                "epochs": EPOCHS,
+                "dataset_generator_seed": 42,
+                "n_users": 16,
+                "n_steps": 360,
+            },
+            runtime_config={"implementation": "numpy"},
+            seeds=list(SEEDS),
+            purpose="smoke",
+            mode="test",
+            display_name=method,
+            row_config=["method"],
+            inputs={"dataset_config": input_record(dataset_config)},
+            code_signature=code,
+            policy="overwrite_exact",
+            skip_completed=True,
+            launch_id="synthetic-smoke",
+        )
+        if allocation.action != "skip":
+            mark_status(allocation.run_dir, "running")
+            required = []
+            for row in frame.to_dict(orient="records"):
+                seed = int(row["seed"])
+                relative = f"seed_{seed}/metrics.json"
+                path = allocation.run_dir / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps(row, indent=2), encoding="utf-8")
+                mark_status(allocation.run_dir, "completed", required_artifacts=[relative], seed=seed)
+                required.append(relative)
+            mark_status(allocation.run_dir, "completed", required_artifacts=required)
+        manifest = load_manifest(allocation.run_dir)
+        selected.append(SelectedRun(allocation.run_dir, manifest, method))
+    return selected
 
 
 def scaled(value: float, deviation: float, exponent: int) -> str:
@@ -554,13 +696,14 @@ def write_family_plot(summary: pd.DataFrame, output: Path) -> None:
 
 def main() -> None:
     project, workspace = roots()
-    output = project / "outputs" / "synthetic_smoke"
+    output = project / "outputs" / "reports" / "synthetic_smoke"
     plots = output / "plots"
     plots.mkdir(parents=True, exist_ok=True)
 
     values, metadata = generate_dataset(project, workspace)
     results, history = run_benchmark(values)
     summary = aggregate(results)
+    selected = write_manifest_runs(results, project)
 
     results.to_csv(output / "results_by_seed.csv", index=False)
     summary.to_csv(output / "results_summary.csv", index=False)
@@ -585,6 +728,13 @@ def main() -> None:
     write_series_plot(values, plots)
     write_training_plot(history, plots)
     write_family_plot(summary, plots)
+    write_report_manifest(
+        output / "report_manifest.json",
+        inputs=selected,
+        config_policy="distinct",
+        repeat_policy="selected",
+        filters={"mode": "test", "purposes": ["smoke"], "families": list(BENCHMARK_FAMILIES)},
+    )
     print(summary.to_string(index=False))
 
 

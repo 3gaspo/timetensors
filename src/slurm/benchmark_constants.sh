@@ -2,6 +2,7 @@
 # Compare constant-window filtering against keeping all pairs and dropping all
 # affected users.
 set -euo pipefail
+FAMILY=constants
 source "$(dirname "${BASH_SOURCE[0]}")/benchmark_common.sh"
 OUT_ROOT="$ROOT/outputs/constants"
 if [ "$EXPERIMENT_MODE" = full ] || [ "$EXPERIMENT_MODE" = ultra ]; then
@@ -25,7 +26,12 @@ run_training() {
             drop_all_users) train_users=true; eval_users=true ;;
             *) log_error "unknown constants policy=$policy"; exit 2 ;;
           esac
-          run_case scripts.experiment "$dataset" "$setting" "${model}_${policy}" \
+          MODEL_CONFIG_ORDER=policy
+          MODEL_CONFIG_VALUES=("policy=$policy")
+          TABLE_ROW_CONFIG=policy
+          TABLE_COLUMN_CONFIG=
+          CASE_DISPLAY_NAME="${model}_${policy}"
+          run_case scripts.experiment "$dataset" "$setting" "$model" \
             +model.name="$model" +model.path="$model" +normalization.name=instance \
             +data.sampling.remove_train_cte="$train_windows" \
             +data.sampling.remove_eval_cte="$eval_windows" \
@@ -44,10 +50,6 @@ run_tables() {
   done
 }
 
-WORKFLOW_STATE_DIR="$OUT_ROOT/.workflow"
-TABLE_INPUT_NAME=run.complete
-TABLE_STAGE_SIGNATURE="v1|family=constants|mode=$EXPERIMENT_MODE|datasets=$DATASETS_CSV|settings=$SETTINGS_CSV|models=${MODELS[*]}|seeds=$SEEDS_CSV|policies=${POLICIES[*]}"
-TRAIN_STAGE_SIGNATURE="$TABLE_STAGE_SIGNATURE|$COMMON_TRAIN_SIGNATURE"
 TABLE_REQUIRED_OUTPUTS=()
 TABLE_EXPECTED_METHODS=()
 for model in "${MODELS[@]}"; do

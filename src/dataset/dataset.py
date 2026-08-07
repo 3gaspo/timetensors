@@ -3230,7 +3230,7 @@ def _fetch_training_data_legacy(
             ratios=cluster_config.get("ratios"),
             sizes=cluster_config.get("sizes"),
             n_clusters=cluster_config.get("n_clusters"),
-            seed=cluster_config.get("seed", seed),
+            seed=seed,
         )
         cluster_creation = {
             "creation_mode": "generated",
@@ -3244,11 +3244,7 @@ def _fetch_training_data_legacy(
             "ratios": cluster_config.get("ratios"),
             "sizes": cluster_config.get("sizes"),
             "n_clusters": cluster_config.get("n_clusters"),
-            "seed": (
-                None
-                if cluster_config.get("seed", seed) in {None, "None"}
-                else int(cluster_config.get("seed", seed))
-            ),
+            "seed": None if seed in {None, "None"} else int(seed),
         }
     elif clusters is not None:
         cluster_creation = {
@@ -3608,7 +3604,7 @@ def fetch_training_data(
             ratios=cluster_config.get("ratios"),
             sizes=cluster_config.get("sizes"),
             n_clusters=cluster_config.get("n_clusters"),
-            seed=cluster_config.get("seed", seed),
+            seed=seed,
         )
         cluster_creation = {
             "creation_mode": "generated",
@@ -3622,11 +3618,7 @@ def fetch_training_data(
             "ratios": cluster_config.get("ratios"),
             "sizes": cluster_config.get("sizes"),
             "n_clusters": cluster_config.get("n_clusters"),
-            "seed": (
-                None
-                if cluster_config.get("seed", seed) in {None, "None"}
-                else int(cluster_config.get("seed", seed))
-            ),
+            "seed": None if seed in {None, "None"} else int(seed),
         }
     elif clusters is not None:
         cluster_creation = {

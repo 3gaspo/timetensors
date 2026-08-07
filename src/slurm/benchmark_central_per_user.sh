@@ -1,6 +1,7 @@
 #!/bin/bash
 # Compare one centralized model with one independently fitted model per user.
 set -euo pipefail
+FAMILY=central_per_user
 source "$(dirname "${BASH_SOURCE[0]}")/benchmark_common.sh"
 OUT_ROOT="$ROOT/outputs/central_per_user"
 if [ "$EXPERIMENT_MODE" = ultra ]; then
@@ -20,13 +21,23 @@ run_training() {
     for setting in "${SETTINGS[@]}"; do
       for scope in central per_user; do
         if [[ " ${USER_MODELS[*]} " == *" patchtst "* ]]; then
-          run_case scripts.experiment "$dataset" "$setting" "patchtst_${scope}" \
+          MODEL_CONFIG_ORDER=scope
+          MODEL_CONFIG_VALUES=("scope=$scope")
+          TABLE_ROW_CONFIG=scope
+          TABLE_COLUMN_CONFIG=
+          CASE_DISPLAY_NAME="patchtst_${scope}"
+          run_case scripts.experiment "$dataset" "$setting" patchtst \
             +model.name=patchtst +model.path=patchtst +normalization.name=instance \
             +training.loss=nmse +experiment.training_scope="$scope"
         fi
         if [[ " ${USER_MODELS[*]} " == *" chronos "* ]]; then
           cross_learning=false; [ "$scope" = central ] && cross_learning=true
-          run_case scripts.experiment "$dataset" "$setting" "chronos_${scope}" \
+          MODEL_CONFIG_ORDER=scope
+          MODEL_CONFIG_VALUES=("scope=$scope")
+          TABLE_ROW_CONFIG=scope
+          TABLE_COLUMN_CONFIG=
+          CASE_DISPLAY_NAME="chronos_${scope}"
+          run_case scripts.experiment "$dataset" "$setting" chronos \
             +model.name=chronos +model.path=chronos +normalization.name=identity \
             +model.kwargs.weights_path="$CHRONOS_WEIGHTS_PATH" \
             +model.kwargs.cross_learning="$cross_learning" \
@@ -43,10 +54,6 @@ run_tables() {
   write_table combined w10_mse "$METHOD_ARG"
 }
 
-WORKFLOW_STATE_DIR="$OUT_ROOT/.workflow"
-TABLE_INPUT_NAME=run.complete
-TABLE_STAGE_SIGNATURE="v1|family=central_per_user|mode=$EXPERIMENT_MODE|datasets=$DATASETS_CSV|settings=$SETTINGS_CSV|seeds=$SEEDS_CSV|models=${USER_MODELS[*]}"
-TRAIN_STAGE_SIGNATURE="$TABLE_STAGE_SIGNATURE|$COMMON_TRAIN_SIGNATURE"
 TABLE_REQUIRED_OUTPUTS=("$OUT_ROOT/results_combined_mse.tex" "$OUT_ROOT/results_combined_w10_mse.tex")
 TABLE_EXPECTED_METHODS=("${METHODS[@]}")
 log_section "workflow start family=central_per_user mode=$EXPERIMENT_MODE stages=$STAGES_SPEC"

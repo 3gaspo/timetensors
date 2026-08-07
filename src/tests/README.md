@@ -12,6 +12,7 @@ python src/tests/test_models.py
 python src/tests/test_results_table.py
 python src/tests/test_sklearn.py
 python src/tests/test_slurm_workflow.py
+python src/tests/test_synthetic_smoke.py
 ```
 
 The scripts intentionally avoid large datasets, checkpoints, and long training

@@ -5,30 +5,52 @@ from tempfile import TemporaryDirectory
 
 import torch
 
+from experiment_runs import allocate_run, mark_status
 from visu.results_table import discover_results, generate_results_table
 
 
-def _save(root: Path, dataset: str, setting: str, method: str, mse: float, seed=None) -> None:
-    directory = root / dataset / setting / method
-    if seed is not None:
-        directory /= f"seed_{seed}"
-    directory.mkdir(parents=True)
-    torch.save({"test1": {"mse": torch.tensor([mse, mse])}}, directory / "all_losses.pt")
+def _save_run(
+    root: Path, dataset: str, setting: str, method: str, values: dict[int, float]
+) -> None:
+    lookback, horizon = map(int, setting.split("_"))
+    identity = root / dataset / setting / "numpy_linear_proxy" / method
+    allocation = allocate_run(
+        identity,
+        project="timetensors",
+        workflow="test",
+        dataset=dataset,
+        lookback=lookback,
+        horizon=horizon,
+        backbone="numpy_linear_proxy",
+        model_config_order=["method"],
+        model_config={"method": method},
+        pipeline_config={},
+        seeds=list(values),
+        display_name=method,
+    )
+    artifacts = []
+    for seed, mse in values.items():
+        relative = f"seed_{seed}/all_losses.pt"
+        path = allocation.run_dir / relative
+        path.parent.mkdir(parents=True)
+        torch.save({"test1": {"mse": torch.tensor([mse, mse])}}, path)
+        mark_status(allocation.run_dir, "completed", seed=seed, required_artifacts=[relative])
+        artifacts.append(relative)
+    mark_status(allocation.run_dir, "completed", required_artifacts=artifacts)
 
 
 def main() -> None:
     with TemporaryDirectory() as tmp:
         root = Path(tmp)
         for dataset in ("electricity", "traffic"):
-            _save(root, dataset, "168_24", "reference", 0.0012)
-            _save(root, dataset, "168_24", "candidate", 0.0009)
-        _save(root, "electricity", "672_168", "reference", 120.0)
-        _save(root, "electricity", "672_168", "candidate", 100.0)
-        _save(root, "electricity", "168_24", "candidate", 0.0011, seed=1)
-        _save(root, "electricity", "168_24", "candidate", 0.0007, seed=2)
+            _save_run(root, dataset, "168_24", "reference", {1: 0.0012})
+            candidate = {1: 0.0011, 2: 0.0007} if dataset == "electricity" else {1: 0.0009}
+            _save_run(root, dataset, "168_24", "candidate", candidate)
+        _save_run(root, "electricity", "672_168", "reference", {1: 120.0})
+        _save_run(root, "electricity", "672_168", "candidate", {1: 100.0})
 
         records = discover_results(root)
-        assert len(records) == 8
+        assert len(records) == 7
         output = generate_results_table(
             root,
             methods=["reference", "candidate"],
@@ -47,8 +69,8 @@ def main() -> None:
 
     with TemporaryDirectory() as tmp:
         root = Path(tmp)
-        _save(root, "electricity", "504_168", "reference", 0.0012, seed=1)
-        _save(root, "electricity", "504_168", "candidate", 0.0009, seed=1)
+        _save_run(root, "electricity", "504_168", "reference", {1: 0.0012})
+        _save_run(root, "electricity", "504_168", "candidate", {1: 0.0009})
         output = generate_results_table(
             root,
             methods=["reference", "candidate"],

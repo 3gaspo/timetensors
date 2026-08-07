@@ -1,6 +1,7 @@
 #!/bin/bash
 # Compare forecasting losses under instance normalization.
 set -euo pipefail
+FAMILY=losses
 source "$(dirname "${BASH_SOURCE[0]}")/benchmark_common.sh"
 OUT_ROOT="$ROOT/outputs/losses"
 read -ra LOSSES <<< "${LOSSES_OVERRIDE:-mse mae nmse nmae relative_mse}"
@@ -10,7 +11,12 @@ run_training() {
     for setting in "${SETTINGS[@]}"; do
       for model in "${MODELS[@]}"; do
         for loss in "${LOSSES[@]}"; do
-          run_case scripts.experiment "$dataset" "$setting" "${model}_${loss}" \
+          MODEL_CONFIG_ORDER=loss
+          MODEL_CONFIG_VALUES=("loss=$loss")
+          TABLE_ROW_CONFIG=loss
+          TABLE_COLUMN_CONFIG=
+          CASE_DISPLAY_NAME="${model}_${loss}"
+          run_case scripts.experiment "$dataset" "$setting" "$model" \
             +model.name="$model" +model.path="$model" +normalization.name=instance +training.loss="$loss"
         done
       done
@@ -25,10 +31,6 @@ run_tables() {
   done
 }
 
-WORKFLOW_STATE_DIR="$OUT_ROOT/.workflow"
-TABLE_INPUT_NAME=run.complete
-TABLE_STAGE_SIGNATURE="v1|family=losses|mode=$EXPERIMENT_MODE|datasets=$DATASETS_CSV|settings=$SETTINGS_CSV|models=${MODELS[*]}|seeds=$SEEDS_CSV|losses=${LOSSES[*]}"
-TRAIN_STAGE_SIGNATURE="$TABLE_STAGE_SIGNATURE|$COMMON_TRAIN_SIGNATURE"
 TABLE_REQUIRED_OUTPUTS=()
 TABLE_EXPECTED_METHODS=()
 for model in "${MODELS[@]}"; do

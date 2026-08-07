@@ -95,9 +95,7 @@ def stats_max_windows(config: Mapping[str, Any]) -> int | None:
 
 
 def stats_seed(config: Mapping[str, Any]) -> int | None:
-    experiment = section(config, "experiment")
-    value = experiment.get("stats_seed", experiment.get("seed"))
-    return None if value in {None, "None", "none", ""} else int(value)
+    return seed(config)
 
 
 def stats_eps(config: Mapping[str, Any]) -> float:
@@ -118,7 +116,7 @@ def dataset_path(config: Mapping[str, Any]) -> Path:
 
 def output_dir(config: Mapping[str, Any]) -> Path:
     output = section(config, "output")
-    return ensure_dir(output.get("dir", "outputs/results"))
+    return ensure_dir(output.get("dir", "outputs/manual_debug"))
 
 
 def save_name(config: Mapping[str, Any]) -> str:
@@ -150,7 +148,9 @@ def seeded_configs(config: Mapping[str, Any]) -> list[dict[str, Any]]:
         seeded["experiment"]["seed"] = int(value)
         if index:
             seeded["experiment"]["rebuild_dataset"] = False
-        seeded.setdefault("output", {})["name"] = f"{base_name}/seed_{int(value)}"
+        seeded.setdefault("output", {})["name"] = (
+            f"{base_name}/seed_{int(value)}" if base_name else f"seed_{int(value)}"
+        )
         expanded.append(seeded)
     return expanded
 
