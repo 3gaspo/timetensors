@@ -69,6 +69,8 @@ allocated by a manifest-aware numbered Slurm workflow.
   train/evaluation, or compare against dropping affected users from both.
 - Losses: `mse`, `mae`, `nmse`, `nmae`, and `relative_mse`.
 - Normalization: identity, global standard, global min-max, instance min-max, instance normalization/RevIN, and the research variants retained under `models/`.
+- Normalization classes use the acronymic type names `RevIN` and `GRevIN`
+  without a redundant `Normalization` suffix.
 - Models: persistence and linear baselines, DLinear, PatchTST, Chronos, TabPFN, and sklearn linear regression.
 - Training scope: `experiment.training_scope=central` or `per_user`.
 - Per-user evaluation saves equal-user means and `w10_*`, the mean loss of the worst 10% of users.
@@ -175,6 +177,14 @@ Each continues as `dataset/L_H/backbone/<configs>/run_n/seed_n/`. Step budget,
 optimizer, split, strides, plotting cadence, and other scientific execution
 choices are pipeline configs in `manifest.json`; device and scheduler placement
 are runtime configs. One seed fixes all stochasticity in that repetition.
+
+Run identity contains only the manifest schema, ordered identity/model configs,
+pipeline and experiment parameters, and seeds. Source files, Slurm fronts,
+datasets, weights, logs, outputs, and directories are never fingerprinted or hashed.
+Plain provenance paths may be recorded but do not affect reuse. Code and data
+changes are manual rerun decisions; use `RUN_CONFLICT_POLICY=new` for another
+repeat with unchanged parameters. Change `schema_version` only for a deliberate
+global artifact-contract break.
 
 The current `schema_version` is 1. Only completed manifests whose required
 artifacts exist can enter a report. `RUN_CONFLICT_POLICY=overwrite_exact`

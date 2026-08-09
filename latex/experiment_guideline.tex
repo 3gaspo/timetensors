@@ -53,7 +53,7 @@
 
 \title{\vspace{-1.5em}\textbf{TimeTensors: Forecasting Benchmark}\\[2mm]\large Experiment Guideline\vspace{-0.4em}}
 \author{Gaspard Berthelier}
-\date{7 August 2026}
+\date{9 August 2026}
 
 \begin{document}
 \maketitle
@@ -231,7 +231,7 @@ The code names are respectively \code{identity}, \code{standard},
    (\sigma_X+\varepsilon)+\mu_X.
 \]
 Thus \code{instance} and \code{revin} use the same
-\code{RevINNormalization} class, with affine parameters disabled and enabled,
+\code{RevIN} class, with affine parameters disabled and enabled,
 respectively. All instance statistics are detached and cached from the current
 lookback. The experiment fixes the training loss to nMSE and reports
 inverse-transformed test MSE separately for each shared backbone.
@@ -459,6 +459,11 @@ Training budget, optimizer, split, strides, and logging/plot controls are
 pipeline configs in \code{manifest.json}; scheduler placement is runtime-only.
 One seed fixes all stochasticity. \code{EXPERIMENT_MODE} selects path subsets
 and is never a phase, family, path component, or computation-signature field.
+
+Run signatures use only the schema, identity/model and pipeline/experiment
+configs, and seeds. Files are not fingerprinted for reuse; provenance is ignored
+and code/data reruns are manual. Only a global contract break changes the schema;
+\code{new} creates an unchanged-parameter repeat.
 
 The current contract uses \code{schema_version: 1} and four states. The default
 \code{overwrite_exact} policy skips exact completion, resumes exact

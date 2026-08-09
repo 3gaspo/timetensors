@@ -190,7 +190,7 @@ run_case() {
     --pipeline-config "training.epochs=$EPOCHS" --pipeline-config "training.valid_eval_freq=$VALID_EVAL_FREQ"
     --pipeline-config "training.logging_eval_freq=$LOGGING_EVAL_FREQ" --pipeline-config "hydra_overrides=$*"
     --runtime-config "training.device=gpu" --runtime-config "slurm.job_id=${SLURM_JOB_ID:-}"
-    --project-root "$ROOT" --policy "$RUN_CONFLICT_POLICY" --skip-completed "$SKIP_COMPLETED"
+    --policy "$RUN_CONFLICT_POLICY" --skip-completed "$SKIP_COMPLETED"
     --force "$FORCE_RUN" --launch-id "$EXPERIMENT_LAUNCH_ID"
   )
   for pair in "${MODEL_CONFIG_VALUES[@]}"; do allocation_args+=(--model-config "$pair"); done

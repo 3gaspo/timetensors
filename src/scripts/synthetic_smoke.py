@@ -24,10 +24,8 @@ from experiment_runs import (
     SelectedRun,
     allocate_run,
     identity_path,
-    input_record,
     load_manifest,
     mark_status,
-    source_signature,
     write_report_manifest,
 )
 
@@ -489,7 +487,6 @@ def aggregate(results: pd.DataFrame) -> pd.DataFrame:
 def write_manifest_runs(results: pd.DataFrame, project: Path) -> list[SelectedRun]:
     """Persist the synthetic smoke matrix through the current run contract."""
     selected: list[SelectedRun] = []
-    code = source_signature(project)
     dataset_config = project / "datasets" / "synthetic_smoke" / "config.json"
     for (family, method), frame in results.groupby(["family", "method"], sort=False):
         root = identity_path(
@@ -523,8 +520,7 @@ def write_manifest_runs(results: pd.DataFrame, project: Path) -> list[SelectedRu
             mode="test",
             display_name=method,
             row_config=["method"],
-            inputs={"dataset_config": input_record(dataset_config)},
-            code_signature=code,
+            inputs={"dataset_config": str(dataset_config)},
             policy="overwrite_exact",
             skip_completed=True,
             launch_id="synthetic-smoke",
