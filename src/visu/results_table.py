@@ -457,7 +457,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--row-scale", action="append", default=[], metavar="DATASET/L_H=EXPONENT")
     parser.add_argument("--show-std", action="store_true", help="Show standard deviation across seeds")
     parser.add_argument("--pipeline-config", action="append", default=[], metavar="KEY=VALUE")
-    parser.add_argument("--config-policy", choices=["distinct", "latest", "selected", "average"], default="distinct")
+    parser.add_argument("--config-policy", choices=["distinct", "latest", "average"], default="distinct")
     parser.add_argument("--repeat-policy", choices=["distinct", "latest", "selected", "average"], default="selected")
     parser.add_argument("--purpose", action="append", default=[])
     parser.add_argument("--caption", default=None)

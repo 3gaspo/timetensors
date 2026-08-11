@@ -178,7 +178,7 @@ class InstanceMinMaxNormalization(nn.Module):
         return y * (self._max - self._min + self.eps) + self._min
 
 
-class RevINNormalization(nn.Module):
+class RevIN(nn.Module):
     """Reversible instance normalization with optional affine and transform."""
 
     name = "revin"
@@ -394,10 +394,10 @@ def build_normalization(
     if name == "instance":
         kwargs.setdefault("dim", dim)
         kwargs.setdefault("affine", False)
-        return RevINNormalization(**kwargs)
+        return RevIN(**kwargs)
     if name == "revin":
         kwargs.setdefault("dim", dim)
-        return RevINNormalization(**kwargs)
+        return RevIN(**kwargs)
     if name in {"grevin", "cmin", "previn"}:
         if dim is None:
             raise ValueError(f"{name!r} normalization requires dim")

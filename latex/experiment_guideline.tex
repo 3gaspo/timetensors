@@ -465,15 +465,27 @@ configs, and seeds. Files are not fingerprinted for reuse; provenance is ignored
 and code/data reruns are manual. Only a global contract break changes the schema;
 \code{new} creates an unchanged-parameter repeat.
 
-The current contract uses \code{schema_version: 1} and four states. The default
+The current contract uses \code{schema_version: 1} and five states. The default
 \code{overwrite_exact} policy skips exact completion, resumes exact
 interruption, and allocates a new \code{run_n} for changed pipeline config.
-Tables support distinct/latest/selected/average config selection and
-selected/latest/distinct/average repeat selection; explicit pipeline filters
-must match even with one run. \code{SELECTED_RUNS.txt} stores selection and each
-report stores its exact input manifests. Old synchronized outputs lacked the
+Finished seeds and runs remain \code{ready}; overall completion occurs only on
+the owning Slurm workflow's final successful exit. Completed manifests are authoritative, without
+later file hashing or synchronization checks. Tables support
+distinct/latest/average config handling and selected/latest/distinct/average
+repeat selection; explicit pipeline filters select configurations and must
+match even with one run. \code{SELECTED_RUNS.txt} stores exact-repeat selection
+and each report stores requested filters and obtained input manifests. Old synchronized outputs lacked the
 loss tensors needed for faithful migration and are isolated under
 \code{outputs/archive/legacy_pre_schema_v1_2026-08-07}.
+
+After successful completion, each root workflow submits \code{publish.slurm}
+with an \code{afterok} dependency. It commits only the producer's exact
+stdout/stderr and launch-tagged run/report roots, excluding \code{*.pt},
+\code{*.npy}, and \code{*.cbm}, then sources \code{$HOME/proxy.sh} with the
+ignored two-line \code{.secrets/proxy.credentials} and pushes
+\code{origin/main}. It never pulls or opens a pull request.
+\code{PUBLISH_RESULTS=false} disables submission; \code{--job-id} supports a
+manual retry.
 
 The synthetic smoke explicitly enumerates every expected method in all seven
 families and requires seeds 1 and 2 for each. Its current run tree is below

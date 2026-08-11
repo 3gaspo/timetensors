@@ -9,7 +9,7 @@ from .baselines import (
     PersistenceBaseline,
     RepeatBaseline,
 )
-from .grevin import GRevINNormalization, build_grevin_normalization
+from .grevin import GRevIN, build_grevin_normalization
 from .models import ModelConfig, TimeTensorModel, build_model_from_config, load_model
 from .normalizations import (
     IdentityNormalization,
@@ -17,7 +17,7 @@ from .normalizations import (
     MinMaxNormalization,
     RMSNormalization,
     RelativeMeanNormalization,
-    RevINNormalization,
+    RevIN,
     SigmoidNormalization,
     StandardNormalization,
     TanhNormalization,
@@ -36,7 +36,7 @@ __all__ = [
     "CovariateAugmentation",
     "DLinear",
     "ExpectedBaseline",
-    "GRevINNormalization",
+    "GRevIN",
     "IdentityNormalization",
     "InstanceMinMaxNormalization",
     "LinearBaseline",
@@ -50,7 +50,7 @@ __all__ = [
     "RelativeMeanNormalization",
     "RepeatBaseline",
     "RepeatConstantOutput",
-    "RevINNormalization",
+    "RevIN",
     "SigmoidNormalization",
     "SkLinearForecaster",
     "StandardNormalization",

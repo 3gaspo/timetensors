@@ -13,6 +13,7 @@ if str(ROOT) not in sys.path:
 
 from models.models import ModelConfig, load_model
 from models.baselines import PeriodicLinearBaseline
+from models import GRevIN, RevIN, build_grevin_normalization, build_normalization
 from runtime import model_specs
 
 
@@ -49,6 +50,11 @@ def _assert_generated_config_forward(name: str, shape: tuple[int, int, int]) -> 
 
 
 def main() -> None:
+    assert isinstance(
+        build_normalization({"name": "revin", "kwargs": {}}, dim=2),
+        RevIN,
+    )
+    assert isinstance(build_grevin_normalization("grevin", 2), GRevIN)
     _assert_forward("linear")
     _assert_forward("periodic_linear", period=4)
     _assert_forward("dlinear", kernel_size=3)

@@ -186,14 +186,18 @@ changes are manual rerun decisions; use `RUN_CONFLICT_POLICY=new` for another
 repeat with unchanged parameters. Change `schema_version` only for a deliberate
 global artifact-contract break.
 
-The current `schema_version` is 1. Only completed manifests whose required
-artifacts exist can enter a report. `RUN_CONFLICT_POLICY=overwrite_exact`
+The current `schema_version` is 1. Only completed manifests can enter a report.
+Finished seeds and runs remain `ready`; completion is written only by the
+owning Slurm workflow's final successful exit after every launched process and
+required artifact has finished. The completed manifest is authoritative and reuse does not hash
+or revalidate synchronized files. `RUN_CONFLICT_POLICY=overwrite_exact`
 skips identical completed runs, resumes identical interrupted runs, and creates
 the next `run_n` for changed pipeline configs. `overwrite_path` and `new` are
-explicit alternatives. Reports support the common distinct/latest/selected/
-average config policy and selected/latest/distinct/average repeat policy;
-explicit pipeline filters must match even with one candidate. Selection is
-recorded in `SELECTED_RUNS.txt`, and every report writes `report_manifest.json`.
+explicit alternatives. Reports support the common distinct/latest/average
+config policy and selected/latest/distinct/average repeat policy. Explicit
+pipeline filters select a pipeline configuration and must match even with one
+candidate. Exact-repeat selection is recorded in `SELECTED_RUNS.txt`, and every
+`report_manifest.json` records requested filters and obtained inputs.
 
 The former result trees could not be migrated because synchronized seed folders
 lacked the excluded `all_losses.pt` payloads required to prove completion. They
@@ -270,6 +274,24 @@ stdout only so the Slurm files remain the canonical run logs. Every profile
 remains sequential within one allocation; resubmit the same front to continue
 from its completion markers.
 
+## Publishing completed Slurm artifacts
+
+A successful root workflow automatically submits `publish.slurm` with an
+`afterok` dependency. The producer handoff contains its exact
+`logs/<job-name>_<job-id>.out`, `.err`, and launch-tagged run/report output
+directories. The publisher excludes `*.pt`, `*.npy`, and `*.cbm`, commits only
+those paths on `main`, sources `$HOME/proxy.sh`, and runs `git push origin main`.
+It never pulls or creates a pull request. Set `PUBLISH_RESULTS=false` to disable
+automatic submission.
+
+Create `.secrets/proxy.credentials` only on the cluster with the NNI on line 1
+and password on line 2, then run `chmod 600 .secrets/proxy.credentials`.
+`.secrets/` is ignored. `PROXY_SCRIPT_PATH`, `PROXY_CREDENTIALS_FILE`, and
+`PUBLISH_PARTITION` are optional overrides. Retry manually with
+`bash src/slurm/publish_results.sh --job-id <producer-job-id>`.
+The external proxy script must accept `--credentials-file <path>`, export
+`https_proxy`, set `NOEXPORT=0`, and return nonzero on failure.
+
 ## Lightweight checks
 
 With the project environment prepared:
@@ -314,3 +336,13 @@ benchmarks remain the authoritative DLinear/PatchTST experiments.
 benchmark families, shared datasets and settings, artifact contracts, and
 practical workflow. `latex/executive_summary.tex` records only completed and
 analyzed results. Both compiled PDFs are kept beside their sources.
+
+## Maintenance workflow
+
+Every project change is recorded in `PENDING_UPDATES.md` with its scope,
+affected contracts, focused checks already completed, deferred integration
+coverage, documentation impact, and rerun requirements. Routine edits use only
+the smallest relevant smoke check. Periodic maintenance verifies pending entries
+against the implementation, runs complementary generic lightweight smoke tests,
+reconciles this README and the project LaTeX documents, and renders affected
+PDFs before resolving the entries.

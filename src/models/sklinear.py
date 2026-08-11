@@ -14,7 +14,7 @@ from .normalizations import (
     MinMaxNormalization,
     RMSNormalization,
     RelativeMeanNormalization,
-    RevINNormalization,
+    RevIN,
     SigmoidNormalization,
     StandardNormalization,
     TanhNormalization,
@@ -198,7 +198,7 @@ class SkLinearForecaster:
             if norm._min is None or norm._max is None:
                 raise RuntimeError("instance min-max statistics are not available")
             return (y - norm._min) / (norm._max - norm._min + norm.eps)
-        if isinstance(norm, RevINNormalization):
+        if isinstance(norm, RevIN):
             if norm._center is None or norm._std is None:
                 raise RuntimeError("RevIN statistics are not available")
             out = (y - norm._center) / (norm._std + norm.eps)

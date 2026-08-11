@@ -9,8 +9,9 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class SlurmWorkflowTest(unittest.TestCase):
     def test_fronts_use_standard_scale_and_stage_controls(self):
-        fronts = sorted(ROOT.glob("*.slurm"))
+        fronts = sorted(ROOT.glob("[0-9][0-9]_*.slurm"))
         self.assertEqual(len(fronts), 7)
+        self.assertTrue((ROOT / "publish.slurm").is_file())
         for path in fronts:
             text = path.read_text(encoding="utf-8")
             self.assertIn('EXPERIMENT_MODE="${EXPERIMENT_MODE:-test}"', text)
@@ -47,6 +48,10 @@ class SlurmWorkflowTest(unittest.TestCase):
         self.assertIn("python -m experiment_runs allocate", common)
         self.assertIn("python -m experiment_runs pending-seeds", common)
         self.assertIn("python -m experiment_runs status", common)
+        self.assertIn("--status ready", common)
+        self.assertIn("python -m experiment_runs ready", common)
+        self.assertIn("python -m experiment_runs complete-launch", common)
+        self.assertNotIn("--status completed", common)
         self.assertIn("dataset_has_tensor_payload", common)
         self.assertIn("missing_tensor_payload", common)
         self.assertNotIn("BENCHMARK_PROFILE", common)

@@ -12,7 +12,7 @@ import torch.nn as nn
 from .normalizations import get_normal_stats
 
 
-class GRevINNormalization(nn.Module):
+class GRevIN(nn.Module):
     """Generalized reversible instance normalization.
 
     The module follows the same contract as the other new-pipeline
@@ -156,7 +156,7 @@ class GRevINNormalization(nn.Module):
         self._pending_cluster_ids = None
         self._cluster_ids = None
 
-    def freeze(self, groups: str | list[str], freeze: bool = True) -> "GRevINNormalization":
+    def freeze(self, groups: str | list[str], freeze: bool = True) -> "GRevIN":
         """Freeze parameter groups by name.
 
         Groups: ``ab``, ``cd``, ``gamma_nu``, ``alpha_beta``.
@@ -223,7 +223,7 @@ class GRevINNormalization(nn.Module):
         *,
         alpha_key: str = "alpha",
         beta_key: str = "beta",
-    ) -> "GRevINNormalization":
+    ) -> "GRevIN":
         """Initialize output affine parameters from loader statistics.
 
         New dataset stats expose scalar ``alpha`` and ``beta`` where
@@ -247,13 +247,13 @@ class GRevINNormalization(nn.Module):
         return self
 
     @classmethod
-    def build_in(cls, dim: int, **kwargs: Any) -> "GRevINNormalization":
+    def build_in(cls, dim: int, **kwargs: Any) -> "GRevIN":
         module = cls(dim, start_in=True, tie_revin=False, personalize="none", **kwargs)
         module.freeze(["ab", "cd", "gamma_nu", "alpha_beta"], freeze=True)
         return module
 
     @classmethod
-    def build_revin(cls, dim: int, **kwargs: Any) -> "GRevINNormalization":
+    def build_revin(cls, dim: int, **kwargs: Any) -> "GRevIN":
         module = cls(dim, start_in=True, tie_revin=True, personalize="none", **kwargs)
         module.freeze(["ab", "cd", "alpha_beta"], freeze=True)
         module.freeze("gamma_nu", freeze=False)
@@ -266,7 +266,7 @@ class GRevINNormalization(nn.Module):
         *,
         n_clusters: int,
         **kwargs: Any,
-    ) -> "GRevINNormalization":
+    ) -> "GRevIN":
         module = cls(
             dim,
             start_in=True,
@@ -286,7 +286,7 @@ class GRevINNormalization(nn.Module):
         *,
         n_clusters: int | None = None,
         **kwargs: Any,
-    ) -> "GRevINNormalization":
+    ) -> "GRevIN":
         personalize = "affine" if n_clusters is not None and int(n_clusters) > 0 else "none"
         module = cls(
             dim,
@@ -434,16 +434,16 @@ def build_grevin_normalization(
     *,
     stats: Mapping[str, Any] | None = None,
     **kwargs: Any,
-) -> GRevINNormalization:
+) -> GRevIN:
     """Build a Grevin-family normalization by preset name."""
 
     key = str(mode)
     if key == "grevin":
-        module = GRevINNormalization(dim, **kwargs)
+        module = GRevIN(dim, **kwargs)
     elif key == "previn":
-        module = GRevINNormalization.build_personalized_revin(dim, **kwargs)
+        module = GRevIN.build_personalized_revin(dim, **kwargs)
     elif key == "cmin":
-        module = GRevINNormalization.build_cmin(dim, **kwargs)
+        module = GRevIN.build_cmin(dim, **kwargs)
     else:
         raise ValueError(f"unknown Grevin mode {mode!r}")
     if stats is not None:
@@ -451,4 +451,4 @@ def build_grevin_normalization(
     return module
 
 
-__all__ = ["GRevINNormalization", "build_grevin_normalization"]
+__all__ = ["GRevIN", "build_grevin_normalization"]
