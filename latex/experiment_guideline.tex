@@ -484,6 +484,8 @@ stdout/stderr and launch-tagged run/report roots, excluding \code{*.pt},
 \code{*.npy}, and \code{*.cbm}, then sources \code{$HOME/codes/proxy.sh} with the
 shared two-line \code{$HOME/codes/.secrets/proxy.credentials} and pushes
 \code{origin/main}. It never pulls or opens a pull request.
+A repository lock serializes the complete add/commit/proxy/push transaction
+and waits up to ten minutes.
 \code{PUBLISH_RESULTS=false} disables submission; \code{--job-id} supports a
 manual retry.
 

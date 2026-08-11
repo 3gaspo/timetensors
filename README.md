@@ -281,13 +281,16 @@ A successful root workflow automatically submits `publish.slurm` with an
 `logs/<job-name>_<job-id>.out`, `.err`, and launch-tagged run/report output
 directories. The publisher excludes `*.pt`, `*.npy`, and `*.cbm`, commits only
 those paths on `main`, sources `$HOME/codes/proxy.sh`, and runs `git push origin main`.
-It never pulls or creates a pull request. Set `PUBLISH_RESULTS=false` to disable
-automatic submission.
+It never pulls or creates a pull request. Concurrent publishers serialize the
+complete add/commit/proxy/push transaction with a repository lock; the default
+wait is 600 seconds and may be changed with `PUBLISH_LOCK_TIMEOUT`. Set
+`PUBLISH_RESULTS=false` to disable automatic submission.
 
 Create `$HOME/codes/.secrets/proxy.credentials` only on the cluster with the NNI
 on line 1 and password on line 2, then run
-`chmod 600 "$HOME/codes/.secrets/proxy.credentials"`. `PROXY_SCRIPT_PATH`, `PROXY_CREDENTIALS_FILE`, and
-`PUBLISH_PARTITION` are optional overrides. Retry manually with
+`chmod 600 "$HOME/codes/.secrets/proxy.credentials"`. `PROXY_SCRIPT_PATH`,
+`PROXY_CREDENTIALS_FILE`, `PUBLISH_PARTITION`, and `PUBLISH_LOCK_TIMEOUT` are
+optional overrides. Retry manually with
 `bash src/slurm/publish_results.sh --job-id <producer-job-id>`.
 The external proxy script must accept `--credentials-file <path>`, export
 `https_proxy`, set `NOEXPORT=0`, and return nonzero on failure.
