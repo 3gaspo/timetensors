@@ -481,8 +481,8 @@ loss tensors needed for faithful migration and are isolated under
 After successful completion, each root workflow submits \code{publish.slurm}
 with an \code{afterok} dependency. It commits only the producer's exact
 stdout/stderr and launch-tagged run/report roots, excluding \code{*.pt},
-\code{*.npy}, and \code{*.cbm}, then sources \code{$HOME/proxy.sh} with the
-ignored two-line \code{.secrets/proxy.credentials} and pushes
+\code{*.npy}, and \code{*.cbm}, then sources \code{$HOME/codes/proxy.sh} with the
+shared two-line \code{$HOME/codes/.secrets/proxy.credentials} and pushes
 \code{origin/main}. It never pulls or opens a pull request.
 \code{PUBLISH_RESULTS=false} disables submission; \code{--job-id} supports a
 manual retry.

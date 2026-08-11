@@ -280,13 +280,13 @@ A successful root workflow automatically submits `publish.slurm` with an
 `afterok` dependency. The producer handoff contains its exact
 `logs/<job-name>_<job-id>.out`, `.err`, and launch-tagged run/report output
 directories. The publisher excludes `*.pt`, `*.npy`, and `*.cbm`, commits only
-those paths on `main`, sources `$HOME/proxy.sh`, and runs `git push origin main`.
+those paths on `main`, sources `$HOME/codes/proxy.sh`, and runs `git push origin main`.
 It never pulls or creates a pull request. Set `PUBLISH_RESULTS=false` to disable
 automatic submission.
 
-Create `.secrets/proxy.credentials` only on the cluster with the NNI on line 1
-and password on line 2, then run `chmod 600 .secrets/proxy.credentials`.
-`.secrets/` is ignored. `PROXY_SCRIPT_PATH`, `PROXY_CREDENTIALS_FILE`, and
+Create `$HOME/codes/.secrets/proxy.credentials` only on the cluster with the NNI
+on line 1 and password on line 2, then run
+`chmod 600 "$HOME/codes/.secrets/proxy.credentials"`. `PROXY_SCRIPT_PATH`, `PROXY_CREDENTIALS_FILE`, and
 `PUBLISH_PARTITION` are optional overrides. Retry manually with
 `bash src/slurm/publish_results.sh --job-id <producer-job-id>`.
 The external proxy script must accept `--credentials-file <path>`, export
