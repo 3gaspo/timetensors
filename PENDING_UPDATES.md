@@ -4,6 +4,18 @@ Last successful maintenance: 2026-08-11 10:45 +02:00.
 
 ## Pending
 
+- 2026-08-17: Harden the shared schema-2 manifest architecture for future
+  upstream dependencies. Single-run resolution now fails when multiple
+  pipeline configurations remain, accepts exact seed filters, and can bind a
+  downstream computation to an upstream run's declared schema, identity/model
+  configuration, pipeline/experiment parameters, and seeds while keeping paths
+  and manifest IDs as provenance only. Affected files:
+  `src/experiment_runs.py` and its focused contract tests. All 13 manifest tests
+  passed. There are no current table-eligible schema-2 manifests or upstream
+  selector, so this adds no migration or rerun beyond the already-required
+  schema-2 experiment reruns. Deferred maintenance: document the capability if
+  a future multi-stage producer is introduced.
+
 - 2026-08-17: Replaced the duplicated two-inference evaluation with one pass
   that captures elementwise losses, stable individual/query/run IDs, and the
   optional example prediction together. `all_losses.pt` is now the sole loss
