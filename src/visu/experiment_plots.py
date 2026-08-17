@@ -152,15 +152,26 @@ def plot_horizon_errors(loss_tensor, title: str = "Mean error by horizon"):
     return fig
 
 
-def plot_per_user_scatter(per_user_loss, loss_name: str, split: str):
+def _grouped_user_losses(payload, loss_name: str):
+    values = torch.as_tensor(payload["losses"][loss_name]).float()
+    metadata = payload.get("metadata") or {}
+    ids = torch.as_tensor(metadata["individual_ids"], dtype=torch.long).reshape(-1)
+    if values.shape[0] != ids.numel():
+        raise ValueError(f"loss {loss_name!r} is not aligned with individual_ids")
+    names = metadata.get("individual_names") or {}
+    for individual_id in torch.unique(ids, sorted=True).tolist():
+        key = str(int(individual_id))
+        yield key, str(names.get(key, key)), values[ids == individual_id]
+
+
+def plot_per_user_scatter(payload, loss_name: str, split: str):
     rows = []
-    names = per_user_loss.get("individual_names", {})
-    for user_id, tensor in per_user_loss["losses"][loss_name].items():
-        sample = tensor.float().mean(dim=tuple(range(1, tensor.ndim))).numpy()
+    for user_id, name, tensor in _grouped_user_losses(payload, loss_name):
+        sample = tensor.mean(dim=tuple(range(1, tensor.ndim))).numpy()
         rows.append(
             {
                 "user_id": user_id,
-                "name": names.get(user_id, user_id),
+                "name": name,
                 "mean": sample.mean(),
                 "std": sample.std(),
             }
@@ -173,10 +184,10 @@ def plot_per_user_scatter(per_user_loss, loss_name: str, split: str):
     return grid.figure, frame
 
 
-def plot_boxplot(per_user_loss, loss_name: str, split: str):
+def plot_boxplot(payload, loss_name: str, split: str):
     rows = []
-    for user_id, tensor in per_user_loss["losses"][loss_name].items():
-        values = tensor.float().mean(dim=tuple(range(1, tensor.ndim))).numpy()
+    for user_id, _, tensor in _grouped_user_losses(payload, loss_name):
+        values = tensor.mean(dim=tuple(range(1, tensor.ndim))).numpy()
         rows.extend({"user_id": user_id, "loss": value} for value in values)
     frame = pd.DataFrame(rows)
     fig, ax = plt.subplots(figsize=(12, 4))
@@ -283,13 +294,11 @@ def display_dashboard(default_run_dir: str | Path = "../../outputs/manual_debug"
 
     def refresh_options():
         all_losses = state.get("all_losses") or {}
-        splits = list(all_losses) or list((state.get("per_user") or {}))
+        splits = list(all_losses)
         split_widget.options = splits
         if splits:
             split_widget.value = splits[0]
-            losses = list(all_losses.get(splits[0], {}))
-            if not losses and state.get("per_user", {}).get(splits[0]):
-                losses = list(state["per_user"][splits[0]]["losses"])
+            losses = list((all_losses.get(splits[0], {}).get("losses") or {}))
             loss_widget.options = losses
             if losses:
                 loss_widget.value = losses[0]
@@ -300,14 +309,13 @@ def display_dashboard(default_run_dir: str | Path = "../../outputs/manual_debug"
         state["run_dir"] = run_dir
         state["history"] = load_pt(run_dir / "train_history.pt")
         state["all_losses"] = load_pt(run_dir / "all_losses.pt") or {}
-        state["per_user"] = load_pt(run_dir / "per_user_all_losses.pt") or {}
         state["results"] = results_table(run_dir)
         refresh_options()
         with output:
             clear_output()
             print("Loaded from", run_dir)
             print("history:", state["history"] is not None)
-            print("splits:", list(state["all_losses"]) or list(state["per_user"]))
+            print("splits:", list(state["all_losses"]))
 
     def draw(_=None):
         with output:
@@ -328,15 +336,25 @@ def display_dashboard(default_run_dir: str | Path = "../../outputs/manual_debug"
             elif kind == "results_json":
                 display(state.get("results", {}))
             elif split and loss_name and kind == "loss_distribution":
-                display(plot_error_distribution(state["all_losses"][split][loss_name], f"{split} {loss_name} distribution"))
+                display(
+                    plot_error_distribution(
+                        state["all_losses"][split]["losses"][loss_name],
+                        f"{split} {loss_name} distribution",
+                    )
+                )
             elif split and loss_name and kind == "horizon_errors":
-                display(plot_horizon_errors(state["all_losses"][split][loss_name], f"{split} {loss_name} by horizon"))
+                display(
+                    plot_horizon_errors(
+                        state["all_losses"][split]["losses"][loss_name],
+                        f"{split} {loss_name} by horizon",
+                    )
+                )
             elif split and loss_name and kind == "per_user_scatter":
-                fig, frame = plot_per_user_scatter(state["per_user"][split], loss_name, split)
+                fig, frame = plot_per_user_scatter(state["all_losses"][split], loss_name, split)
                 display(fig)
                 display(frame.sort_values("mean", ascending=False).head(20))
             elif split and loss_name and kind == "per_user_boxplot":
-                display(plot_boxplot(state["per_user"][split], loss_name, split))
+                display(plot_boxplot(state["all_losses"][split], loss_name, split))
 
     reload_button.on_click(load_artifacts)
     for widget in [plot_kind, split_widget, loss_widget, logscale_widget]:

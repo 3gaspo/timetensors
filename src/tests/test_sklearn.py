@@ -63,7 +63,10 @@ def main() -> None:
         assert result["weight_plot_paths"]["image"].exists()
         assert result["weight_plot_paths"]["image"].suffix == ".pdf"
         assert "valid1" in result["all_losses"]
-        assert result["all_losses"]["valid1"]["mse"].numel() > 0
+        payload = result["all_losses"]["valid1"]
+        assert payload["losses"]["mse"].numel() > 0
+        assert payload["metadata"]["individual_ids"].numel() == payload["losses"]["mse"].shape[0]
+        assert "user_mean_mse" in payload["summaries"]
 
     print("test_sklearn: ok")
 

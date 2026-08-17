@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import logging
 import math
+import os
 import re
 import statistics
 from dataclasses import dataclass
@@ -22,7 +23,14 @@ from typing import Any, Iterable, Mapping, Sequence
 
 import torch
 
-from experiment_runs import ManifestError, SelectedRun, load_manifest, select_identity_runs, write_report_manifest
+from experiment_runs import (
+    ManifestError,
+    SelectedRun,
+    load_manifest,
+    manifest_is_selectable,
+    select_identity_runs,
+    write_report_manifest,
+)
 
 
 LOGGER = logging.getLogger(__name__)
@@ -65,6 +73,7 @@ def _discover_results_and_runs(
     purposes: Iterable[str] | None = None,
 ) -> tuple[list[Result], list[SelectedRun]]:
     root = Path(experiment_dir).expanduser().resolve()
+    active_launch = os.environ.get("EXPERIMENT_LAUNCH_ID")
     if not root.is_dir():
         raise FileNotFoundError(f"experiment directory does not exist: {root}")
     results: list[Result] = []
@@ -74,7 +83,7 @@ def _discover_results_and_runs(
     )
     for identity_root in identity_roots:
         manifests = [load_manifest(path) for path in identity_root.glob("run_*/manifest.json")]
-        if not any(manifest["status"] == "completed" for manifest in manifests):
+        if not any(manifest_is_selectable(manifest, allow_ready_launch_id=active_launch) for manifest in manifests):
             continue
         selected = select_identity_runs(
             identity_root,
@@ -82,12 +91,13 @@ def _discover_results_and_runs(
             config_policy=config_policy,
             repeat_policy=repeat_policy,
             purposes=purposes,
+            allow_ready_launch_id=active_launch,
         )
         selected_runs.extend(selected)
         for choice in selected:
             identity = choice.manifest["identity"]
             seed_states = choice.manifest.get("seed_status", {})
-            seeds = [int(seed) for seed, state in seed_states.items() if state.get("status") == "completed"]
+            seeds = [int(seed) for seed, state in seed_states.items() if state.get("status") in {"ready", "completed"}]
             paths = [(choice.run_dir / f"seed_{seed}" / "all_losses.pt", seed) for seed in seeds]
             if not paths and (choice.run_dir / "all_losses.pt").is_file():
                 paths = [(choice.run_dir / "all_losses.pt", None)]
@@ -100,9 +110,13 @@ def _discover_results_and_runs(
                     payload = torch.load(path, map_location="cpu")
                 if not isinstance(payload, Mapping):
                     continue
-                for split, metrics in payload.items():
-                    if not isinstance(metrics, Mapping):
-                        metrics = {"loss": metrics}
+                for split, split_payload in payload.items():
+                    if not isinstance(split_payload, Mapping):
+                        continue
+                    metrics = {
+                        **dict(split_payload.get("losses") or {}),
+                        **dict(split_payload.get("summaries") or {}),
+                    }
                     for metric, value in metrics.items():
                         results.append(
                             Result(

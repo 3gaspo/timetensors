@@ -1,4 +1,4 @@
-"""Static contract checks for exact-path Slurm publishing."""
+"""Static contract checks for log-scoped or full-tree manual publishing."""
 
 from pathlib import Path
 import unittest
@@ -8,34 +8,37 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class PublisherContractTest(unittest.TestCase):
-    def test_publisher_is_exact_afterok_and_proxy_aware(self):
-        publisher = (ROOT / "src/slurm/publish_results.sh").read_text(encoding="utf-8")
-        front = (ROOT / "publish.slurm").read_text(encoding="utf-8")
+    def test_publisher_is_manual_scoped_and_proxy_aware(self):
+        publisher = (ROOT / "publish_job.sh").read_text(encoding="utf-8")
         ignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
         shells = "\n".join(
             path.read_text(encoding="utf-8")
             for path in (ROOT / "src/slurm").glob("*.sh")
         )
 
-        self.assertIn('"--dependency=afterok:$producer_job_id"', publisher)
-        self.assertIn("logs/%s_%s.out", publisher)
-        self.assertIn("logs/%s_%s.err", publisher)
-        self.assertIn("launch_id", publisher)
+        self.assertFalse((ROOT / "publish.slurm").exists())
+        self.assertFalse((ROOT / "src/slurm/publish_results.sh").exists())
+        self.assertIn('logs/*_"$job_id".out', publisher)
+        self.assertIn('logs/*_"$job_id".err', publisher)
+        self.assertNotIn("launch_id", publisher)
+        self.assertNotIn('find "$project_root/outputs"', publisher)
+        self.assertIn("paths=(logs outputs)", publisher)
         self.assertIn("git add -v -f --", publisher)
         self.assertIn("git commit --only", publisher)
         self.assertIn("git push origin main", publisher)
-        self.assertNotIn("git pull", publisher)
+        self.assertIn("git pull --ff-only origin main", publisher)
+        self.assertLess(publisher.index('. "$proxy_script"'), publisher.index("git pull --ff-only origin main"))
+        self.assertLess(publisher.index("git pull --ff-only origin main"), publisher.index("git add -v -f --"))
+        self.assertLess(publisher.index("git add -v -f --"), publisher.index("git commit --only"))
         self.assertIn("**/*.pt", publisher)
         self.assertIn("**/*.npy", publisher)
         self.assertIn("**/*.cbm", publisher)
-        self.assertIn('. "$proxy_script" --credentials-file "$credentials_file"', publisher)
+        self.assertIn('. "$proxy_script"', publisher)
         self.assertIn("$HOME/codes/proxy.sh", publisher)
-        self.assertIn("$HOME/codes/.secrets/proxy.credentials", publisher)
-        self.assertIn("flock -w", publisher)
-        self.assertIn(".git/slurm-publish.lock", publisher)
-        self.assertIn("set -euo pipefail", front)
-        self.assertIn("publish_results_main", front)
-        self.assertIn("submit_publish_job", shells)
+        self.assertNotIn("PROXY_CREDENTIALS_FILE", publisher)
+        self.assertNotIn("unset GIT_ASKPASS", publisher)
+        self.assertNotIn("submit_publish_job", shells)
+        self.assertIn("complete-launch", shells)
         self.assertIn(".secrets/", ignore)
 
 

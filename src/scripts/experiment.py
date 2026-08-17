@@ -132,7 +132,6 @@ def run_experiment(config: Mapping[str, Any]) -> dict[str, Any]:
             loaders=loaders,
         )
         results["all_losses_path"] = str(eval_result["all_losses_path"])
-        results["per_user_all_losses_path"] = str(eval_result["per_user_all_losses_path"])
         if eval_result.get("example_prediction_path") is not None:
             results["example_prediction_path"] = str(eval_result["example_prediction_path"])
         logged_device = _log_device_once(

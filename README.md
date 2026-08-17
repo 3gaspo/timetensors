@@ -73,13 +73,18 @@ allocated by a manifest-aware numbered Slurm workflow.
   without a redundant `Normalization` suffix.
 - Models: persistence and linear baselines, DLinear, PatchTST, Chronos, TabPFN, and sklearn linear regression.
 - Training scope: `experiment.training_scope=central` or `per_user`.
-- Per-user evaluation saves equal-user means and `w10_*`, the mean loss of the worst 10% of users.
+- Evaluation performs one inference pass per configured run and stores each
+  metric as one elementwise tensor aligned with compact user, query, and run
+  ID tensors. Equal-user means and `w10_*`, the mean loss of the worst 10% of
+  users, are derived from those rows without another inference pass.
 
 Global standard and min-max statistics are computed from accessible training
 lookbacks under the same cutoff and target-split rules. Final artifacts are
 written below `<output.dir>/<output.name>/`, including `model_state.pt`,
 `train_history.pt`, `criterion_loss.pdf`, `all_losses.pt`, and
-`per_user_all_losses.pt`.
+optional `example_prediction.pdf`. Each split in `all_losses.pt` contains
+`losses`, aligned `metadata`, and scalar `summaries`; per-user tensor copies are
+not written.
 
 ## Slurm benchmarks
 
@@ -186,10 +191,13 @@ changes are manual rerun decisions; use `RUN_CONFLICT_POLICY=new` for another
 repeat with unchanged parameters. Change `schema_version` only for a deliberate
 global artifact-contract break.
 
-The current `schema_version` is 1. Only completed manifests can enter a report.
-Finished seeds and runs remain `ready`; completion is written only by the
-owning Slurm workflow's final successful exit after every launched process and
-required artifact has finished. The completed manifest is authoritative and reuse does not hash
+The current `schema_version` is 2. Schema 1 runs use the replaced duplicated
+per-user loss contract and must be rerun. Only completed manifests can enter a report.
+The overall run remains `running` with `ready_at_utc` while finished seed
+states are `ready`; completion is written immediately after that
+configuration's producer process returns successfully with every required
+artifact. Later configuration or table failures preserve completed runs and
+interrupt only unfinished work. The completed manifest is authoritative and reuse does not hash
 or revalidate synchronized files. `RUN_CONFLICT_POLICY=overwrite_exact`
 skips identical completed runs, resumes identical interrupted runs, and creates
 the next `run_n` for changed pipeline configs. `overwrite_path` and `new` are
@@ -274,26 +282,34 @@ stdout only so the Slurm files remain the canonical run logs. Every profile
 remains sequential within one allocation; resubmit the same front to continue
 from its completion markers.
 
-## Publishing completed Slurm artifacts
+## Publishing terminal Slurm artifacts
 
-A successful root workflow automatically submits `publish.slurm` with an
-`afterok` dependency. The producer handoff contains its exact
-`logs/<job-name>_<job-id>.out`, `.err`, and launch-tagged run/report output
-directories. The publisher excludes `*.pt`, `*.npy`, and `*.cbm`, commits only
-those paths on `main`, sources `$HOME/codes/proxy.sh`, and runs `git push origin main`.
-It never pulls or creates a pull request. Concurrent publishers serialize the
-complete add/commit/proxy/push transaction with a repository lock; the default
-wait is 600 seconds and may be changed with `PUBLISH_LOCK_TIMEOUT`. Set
-`PUBLISH_RESULTS=false` to disable automatic submission.
+Slurm jobs never submit a publisher or run Git commands. After any job reaches
+a terminal state, including failure, cancellation, or timeout, run the manual
+publisher from that project's Git root:
 
-Create `$HOME/codes/.secrets/proxy.credentials` only on the cluster with the NNI
-on line 1 and password on line 2, then run
-`chmod 600 "$HOME/codes/.secrets/proxy.credentials"`. `PROXY_SCRIPT_PATH`,
-`PROXY_CREDENTIALS_FILE`, `PUBLISH_PARTITION`, and `PUBLISH_LOCK_TIMEOUT` are
-optional overrides. Retry manually with
-`bash src/slurm/publish_results.sh --job-id <producer-job-id>`.
-The external proxy script must accept `--credentials-file <path>`, export
-`https_proxy`, set `NOEXPORT=0`, and return nonzero on failure.
+```bash
+bash publish_job.sh <job-id>
+```
+
+The script first verifies `main`, sources `$HOME/codes/proxy.sh`, and runs
+`git pull --ff-only origin main`. With a job ID, it selects only the exact
+`logs/*_<job-id>.out`/`.err` pair. It force-adds only those paths while excluding
+`*.pt`, `*.npy`, and `*.cbm`, commits them, and pushes `origin main`. A
+non-fast-forward pull stops without creating a merge commit, and the script
+never creates a pull request. Existing unrelated staged paths are excluded from
+the commit.
+
+Omit the job ID to force-add, commit, and push the complete `logs/` and
+lightweight `outputs/` trees:
+
+```bash
+bash publish_job.sh
+```
+
+`PROXY_SCRIPT_PATH` overrides the default `$HOME/codes/proxy.sh`. The publisher
+sources that script once for both the pull and push and leaves the shell's
+existing GitHub credential and askpass context untouched.
 
 ## Lightweight checks
 

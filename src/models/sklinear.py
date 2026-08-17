@@ -47,21 +47,41 @@ def _slice_temporal_context(context: torch.Tensor, date: int, length: int) -> to
     return context[..., date : date + length]
 
 
-def _accessible_xy_from_dataset(dataset: Any, batch_size: int) -> Iterator[tuple[torch.Tensor, torch.Tensor]]:
+def _accessible_xy_from_dataset(
+    dataset: Any,
+    batch_size: int,
+) -> Iterator[tuple[torch.Tensor, torch.Tensor, dict[str, Any]]]:
     inputs: list[torch.Tensor] = []
     targets: list[torch.Tensor] = []
+    individual_ids: list[int] = []
+    individual_names: list[str] = []
+    query_ids: list[int] = []
     for individual, query_t in dataset.index_sampler.iter_accessible_pairs():
         start = int(query_t) - dataset.lags + 1
         stop = int(query_t) + dataset.horizon + 1
         window = dataset.data.values[[individual], :, start:stop]
         inputs.append(window[:, :, : dataset.lags])
         targets.append(window[:, :, dataset.lags :])
+        individual_ids.append(int(dataset.data.individual_ids[individual]))
+        individual_names.append(str(dataset.data.individual_names[individual]))
+        query_ids.append(int(dataset.data.date_ids[query_t]))
         if len(inputs) >= batch_size:
-            yield torch.cat(inputs, dim=0), torch.cat(targets, dim=0)
+            yield torch.cat(inputs, dim=0), torch.cat(targets, dim=0), {
+                "individual_ids": torch.tensor(individual_ids, dtype=torch.long),
+                "individual_names": list(individual_names),
+                "query_ids": torch.tensor(query_ids, dtype=torch.long),
+            }
             inputs.clear()
             targets.clear()
+            individual_ids.clear()
+            individual_names.clear()
+            query_ids.clear()
     if inputs:
-        yield torch.cat(inputs, dim=0), torch.cat(targets, dim=0)
+        yield torch.cat(inputs, dim=0), torch.cat(targets, dim=0), {
+            "individual_ids": torch.tensor(individual_ids, dtype=torch.long),
+            "individual_names": list(individual_names),
+            "query_ids": torch.tensor(query_ids, dtype=torch.long),
+        }
 
 
 def iter_loader_xy(
@@ -69,7 +89,8 @@ def iter_loader_xy(
     *,
     mode: str = "accessible",
     max_windows: int | None = None,
-) -> Iterator[tuple[torch.Tensor, torch.Tensor]]:
+    include_metadata: bool = False,
+) -> Iterator[Any]:
     """Yield ``(inputs, targets)`` batches from a loader.
 
     ``mode="accessible"`` deterministically unrolls all sampler-accessible
@@ -80,20 +101,24 @@ def iter_loader_xy(
     mode = str(mode)
     seen = 0
 
-    def emit(x: torch.Tensor, y: torch.Tensor):
+    def emit(x: torch.Tensor, y: torch.Tensor, metadata: Mapping[str, Any] | None = None):
         nonlocal seen
+        metadata = dict(metadata or {})
         if max_windows is not None:
             remaining = int(max_windows) - seen
             if remaining <= 0:
                 return None
             x = x[:remaining]
             y = y[:remaining]
+            for key in ("individual_ids", "individual_names", "query_ids"):
+                if metadata.get(key) is not None:
+                    metadata[key] = metadata[key][:remaining]
         seen += x.shape[0]
-        return x, y
+        return (x, y, metadata) if include_metadata else (x, y)
 
     if mode == "loader":
         for batch in loader:
-            item = emit(batch["inputs"], batch["targets"])
+            item = emit(batch["inputs"], batch["targets"], batch.get("metadata"))
             if item is None:
                 break
             yield item
@@ -104,8 +129,8 @@ def iter_loader_xy(
 
     batch_size = int(getattr(loader, "batch_size", None) or 256)
     for dataset in _dataset_components(loader.dataset):
-        for x, y in _accessible_xy_from_dataset(dataset, batch_size):
-            item = emit(x, y)
+        for x, y, metadata in _accessible_xy_from_dataset(dataset, batch_size):
+            item = emit(x, y, metadata)
             if item is None:
                 return
             yield item

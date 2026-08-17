@@ -34,6 +34,7 @@ from runtime import (
 )
 from visu.experiment_plots import save_linear_weight_plots
 
+from .evaluate import build_loss_payload
 from .losses import get_losses
 
 
@@ -79,8 +80,13 @@ def predict_loader(
     max_windows: int | None = None,
 ):
     """Yield raw inputs, targets, and SkLinear predictions for a loader."""
-    for x, y in iter_loader_xy(loader, mode=unroll_mode, max_windows=max_windows):
-        yield x, y, model.predict(x)
+    for x, y, metadata in iter_loader_xy(
+        loader,
+        mode=unroll_mode,
+        max_windows=max_windows,
+        include_metadata=True,
+    ):
+        yield x, y, model.predict(x), metadata
 
 
 def evaluate_sklearn(
@@ -90,10 +96,16 @@ def evaluate_sklearn(
     *,
     unroll_mode: str = "accessible",
     max_windows: int | None = None,
-) -> dict[str, torch.Tensor]:
+) -> dict[str, Any]:
     collected: dict[str, list[torch.Tensor]] = {name: [] for name in eval_losses}
+    collected_metadata: dict[str, Any] = {
+        "individual_ids": [],
+        "query_ids": [],
+        "run_ids": [],
+        "individual_names": {},
+    }
     with torch.inference_mode():
-        for x, y, pred in predict_loader(
+        for x, y, pred, metadata in predict_loader(
             model,
             loader,
             unroll_mode=unroll_mode,
@@ -104,10 +116,23 @@ def evaluate_sklearn(
                 collected[name].append(
                     criterion(pred, y, context=x, mean=mean, std=std).detach().cpu()
                 )
-    return {
+            for key in ("individual_ids", "query_ids"):
+                collected_metadata[key].append(torch.as_tensor(metadata[key]).reshape(-1))
+            collected_metadata["run_ids"].append(torch.zeros(x.shape[0], dtype=torch.int32))
+            for individual_id, individual_name in zip(
+                torch.as_tensor(metadata["individual_ids"]).reshape(-1).tolist(),
+                metadata["individual_names"],
+            ):
+                collected_metadata["individual_names"][str(int(individual_id))] = str(individual_name)
+    losses = {
         name: torch.cat(values, dim=0) if values else torch.empty(0)
         for name, values in collected.items()
     }
+    metadata = {
+        key: torch.cat(value, dim=0) if isinstance(value, list) and value else value
+        for key, value in collected_metadata.items()
+    }
+    return build_loss_payload({"losses": losses, "metadata": metadata})
 
 
 def train_sklearn_stage(

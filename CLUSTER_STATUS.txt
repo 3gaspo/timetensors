@@ -1,8 +1,10 @@
 CLUSTER EXPERIMENT STATUS
-Updated: 2026-08-07
+Updated: 2026-08-17
 
-SCHEMA V1 CUTOVER (CURRENT HANDOFF)
-- Current table-eligible schema-1 runs: none.
+SCHEMA V2 CUTOVER (CURRENT HANDOFF)
+- Current table-eligible schema-2 runs: none.
+- Schema 2 replaces duplicated per-user loss artifacts with one row-aligned
+  `all_losses.pt`; no schema-1 scientific run can be reused.
 - Pre-schema artifacts are preserved under
   outputs/archive/legacy_pre_schema_v1_2026-08-07/ and are excluded from
   current readers.
@@ -32,8 +34,8 @@ LATEST CLUSTER RUN ANALYSIS
   windows; this validates the workflow but cannot rank policies.
 
 NEXT JOBS
-1. Run EXPERIMENT_MODE=test sbatch 01_constants.slurm under schema 1.
-2. Rerun EXPERIMENT_MODE=full sbatch 01_constants.slurm under schema 1 after
+1. Run EXPERIMENT_MODE=test sbatch 01_constants.slurm under schema 2.
+2. Rerun EXPERIMENT_MODE=full sbatch 01_constants.slurm under schema 2 after
    the test passes; inspect memory use for Traffic 504:168/drop_all_users.
 3. Run EXPERIMENT_MODE=full sbatch 02_sampling.slurm only after the constants
    result is complete and analyzed. No synchronized evidence shows that this

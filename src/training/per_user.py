@@ -5,12 +5,10 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any, Mapping
 
-import torch
-
 from runtime import run_dir, save_name, save_torch, section, to_plain_config
 from visu.experiment_plots import save_criterion_loss_plot
 
-from .evaluate import eval_stage, summarize_per_user
+from .evaluate import eval_stage, merge_loss_payloads
 from .train import fetch_loaders, train_stage
 
 
@@ -34,7 +32,7 @@ def train_per_user(config: Mapping[str, Any]) -> dict[str, Any]:
     base_name = save_name(config)
     initial_loaders, _ = fetch_loaders(config)
     user_ids = [int(value) for value in initial_loaders["train"].dataset.data.individual_ids]
-    merged: dict[str, dict[str, Any]] = {}
+    split_payloads: dict[str, list[Mapping[str, Any]]] = {}
 
     for user_id in user_ids:
         user_config = deepcopy(config)
@@ -56,25 +54,17 @@ def train_per_user(config: Mapping[str, Any]) -> dict[str, Any]:
                 section(user_config, "training").get("plot_step_train_loss", False)
             ),
         )
-        for split, payload in evaluation["per_user_all_losses"].items():
-            target = merged.setdefault(split, {"losses": {}, "individual_names": {}})
-            target["individual_names"].update(payload.get("individual_names", {}))
-            for metric, users in payload.get("losses", {}).items():
-                target["losses"].setdefault(metric, {}).update(users)
+        for split, payload in evaluation["all_losses"].items():
+            split_payloads.setdefault(split, []).append(payload)
 
-    all_losses = {}
-    for split, payload in merged.items():
-        summary = summarize_per_user(payload)
-        for metric in payload["losses"]:
-            summary[metric] = summary[f"user_mean_{metric}"]
-        all_losses[split] = summary
+    all_losses = {
+        split: merge_loss_payloads(payloads, report_equal_user_metrics=True)
+        for split, payloads in split_payloads.items()
+    }
 
     output = run_dir(config)
     all_path = save_torch(all_losses, output / "all_losses.pt")
-    per_user_path = save_torch(merged, output / "per_user_all_losses.pt")
     return {
         "all_losses": all_losses,
-        "per_user_all_losses": merged,
         "all_losses_path": all_path,
-        "per_user_all_losses_path": per_user_path,
     }

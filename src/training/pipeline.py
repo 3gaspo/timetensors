@@ -167,7 +167,9 @@ def parse_batch(batch: Any) -> Batch:
         y = _first_present(batch, "y", "Y", "target", "targets", "future_values")
         if x is None or y is None:
             raise ValueError("dict batch requires input and target entries")
-        metadata = {
+        nested_metadata = batch.get("metadata")
+        metadata = dict(nested_metadata) if isinstance(nested_metadata, Mapping) else {}
+        metadata.update({
             key: value
             for key, value in batch.items()
             if key
@@ -193,8 +195,9 @@ def parse_batch(batch: Any) -> Batch:
                 "static",
                 "individual_context",
                 "global_context",
+                "metadata",
             }
-        }
+        })
         covariates = batch.get("covariates", batch.get("context"))
         if covariates is None and (
             batch.get("individual_context") is not None
@@ -501,18 +504,27 @@ class TorchLearner:
         thresholds: Mapping[str, float] | None = None,
         runs: int = 1,
         seed: int | None = None,
+        capture_example: bool = False,
     ) -> dict[str, Any]:
         set_seed(seed)
         thresholds = dict(thresholds or {})
         losses: dict[str, Any] = {}
         counts: dict[str, int] = {}
         exotics: dict[str, list[dict[str, Any]]] = {}
+        sample_metadata: dict[str, Any] = {}
+        example: dict[str, torch.Tensor] | None = None
         self.model.eval()
         with torch.inference_mode():
-            for _ in range(int(runs)):
+            for run_index in range(int(runs)):
                 for raw_batch in loader:
                     batch = self._prepare_batch(raw_batch)
                     prediction = self._predict(batch)
+                    if capture_example and example is None:
+                        example = {
+                            "inputs": batch.x[:1].detach().cpu(),
+                            "targets": batch.y[:1].detach().cpu(),
+                            "predictions": prediction[:1].detach().cpu(),
+                        }
                     mean, std = get_normal_stats(batch.x, dim=-1, keepdim=True, detach=True)
                     for name, criterion in self.eval_losses.items():
                         loss = criterion(
@@ -532,9 +544,18 @@ class TorchLearner:
                             return_mode,
                             thresholds,
                         )
+                    if return_mode == "all":
+                        self._collect_sample_metadata(
+                            sample_metadata,
+                            batch.metadata,
+                            batch_size=batch.x.shape[0],
+                            run_index=run_index,
+                        )
         return {
             "losses": self._finalize_losses(losses, counts, return_mode),
             "exotics": exotics,
+            "metadata": self._finalize_sample_metadata(sample_metadata),
+            "example": example,
         }
 
     def _prepare_batch(self, batch: Any) -> Batch:
@@ -621,6 +642,47 @@ class TorchLearner:
             elif return_mode == "all":
                 output[name] = torch.cat(value, dim=0)
         return output
+
+    @staticmethod
+    def _collect_sample_metadata(
+        output: dict[str, Any],
+        metadata: Mapping[str, Any] | None,
+        *,
+        batch_size: int,
+        run_index: int,
+    ) -> None:
+        """Collect compact row-aligned identifiers for complete loss tensors."""
+        metadata = metadata or {}
+        for key in ("individual_ids", "query_ids"):
+            value = metadata.get(key)
+            if value is None:
+                continue
+            tensor = torch.as_tensor(value).reshape(-1)
+            if tensor.numel() != batch_size:
+                raise ValueError(
+                    f"metadata {key!r} has {tensor.numel()} rows for batch size {batch_size}"
+                )
+            output.setdefault(key, []).append(tensor.detach().cpu())
+        output.setdefault("run_ids", []).append(
+            torch.full((batch_size,), int(run_index), dtype=torch.int32)
+        )
+
+        ids = metadata.get("individual_ids")
+        names = metadata.get("individual_names")
+        if ids is not None and names is not None:
+            id_values = torch.as_tensor(ids).reshape(-1).detach().cpu().tolist()
+            if len(names) != len(id_values):
+                raise ValueError("individual_names must align with individual_ids")
+            name_map = output.setdefault("individual_names", {})
+            for individual_id, name in zip(id_values, names):
+                name_map[str(int(individual_id))] = str(name)
+
+    @staticmethod
+    def _finalize_sample_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+        return {
+            key: torch.cat(value, dim=0) if isinstance(value, list) else value
+            for key, value in metadata.items()
+        }
 
 
 def load_learner(

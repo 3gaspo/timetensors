@@ -69,21 +69,14 @@ def discover_losses(output_root: str | Path) -> pd.DataFrame:
                 }
             )
             continue
-        for split, losses in (data or {}).items():
-            if not isinstance(losses, dict):
-                rows.append(
-                    {
-                        "dataset": dataset,
-                        "setting": setting,
-                        "model": model,
-                        "split": split,
-                        "metric": "loss",
-                        "value": tensor_mean(losses),
-                        "path": str(loss_path),
-                    }
-                )
+        for split, payload in (data or {}).items():
+            if not isinstance(payload, dict):
                 continue
-            for metric, value in losses.items():
+            metrics = {
+                **dict(payload.get("losses") or {}),
+                **dict(payload.get("summaries") or {}),
+            }
+            for metric, value in metrics.items():
                 rows.append(
                     {
                         "dataset": dataset,

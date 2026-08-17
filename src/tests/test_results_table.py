@@ -33,7 +33,16 @@ def _save_run(
         relative = f"seed_{seed}/all_losses.pt"
         path = allocation.run_dir / relative
         path.parent.mkdir(parents=True)
-        torch.save({"test1": {"mse": torch.tensor([mse, mse])}}, path)
+        torch.save(
+            {
+                "test1": {
+                    "losses": {"mse": torch.tensor([mse, mse])},
+                    "metadata": {},
+                    "summaries": {},
+                }
+            },
+            path,
+        )
         mark_status(allocation.run_dir, "completed", seed=seed, required_artifacts=[relative])
         artifacts.append(relative)
     mark_status(allocation.run_dir, "completed", required_artifacts=artifacts)

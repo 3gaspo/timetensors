@@ -465,11 +465,15 @@ configs, and seeds. Files are not fingerprinted for reuse; provenance is ignored
 and code/data reruns are manual. Only a global contract break changes the schema;
 \code{new} creates an unchanged-parameter repeat.
 
-The current contract uses \code{schema_version: 1} and five states. The default
+The current contract uses \code{schema_version: 1} and four overall states:
+\code{not_run}, \code{running}, \code{interrupted}, and \code{completed}; seed
+state may additionally be \code{ready}. The default
 \code{overwrite_exact} policy skips exact completion, resumes exact
 interruption, and allocates a new \code{run_n} for changed pipeline config.
-Finished seeds and runs remain \code{ready}; overall completion occurs only on
-the owning Slurm workflow's final successful exit. Completed manifests are authoritative, without
+The overall run remains \code{running} with \code{ready_at_utc} while finished
+seed states are \code{ready}; completion occurs immediately after that
+configuration's producer process returns successfully. Later configuration or
+table failures preserve completed runs and interrupt only unfinished work. Completed manifests are authoritative, without
 later file hashing or synchronization checks. Tables support
 distinct/latest/average config handling and selected/latest/distinct/average
 repeat selection; explicit pipeline filters select configurations and must
@@ -478,16 +482,17 @@ and each report stores requested filters and obtained input manifests. Old synch
 loss tensors needed for faithful migration and are isolated under
 \code{outputs/archive/legacy_pre_schema_v1_2026-08-07}.
 
-After successful completion, each root workflow submits \code{publish.slurm}
-with an \code{afterok} dependency. It commits only the producer's exact
-stdout/stderr and launch-tagged run/report roots, excluding \code{*.pt},
-\code{*.npy}, and \code{*.cbm}, then sources \code{$HOME/codes/proxy.sh} with the
-shared two-line \code{$HOME/codes/.secrets/proxy.credentials} and pushes
-\code{origin/main}. It never pulls or opens a pull request.
-A repository lock serializes the complete add/commit/proxy/push transaction
-and waits up to ten minutes.
-\code{PUBLISH_RESULTS=false} disables submission; \code{--job-id} supports a
-manual retry.
+Slurm workflows never submit a publisher or execute Git commands. After any
+terminal state, including failure, cancellation, or timeout, the user runs
+\code{bash publish_job.sh <job-id>} from the project root. The script verifies
+\code{main}, sources \code{$HOME/codes/proxy.sh} (or
+\code{PROXY_SCRIPT_PATH}), and fast-forward pulls \code{origin/main} before
+artifact selection or staging. It then commits only that job's exact
+stdout/stderr pair and launch-tagged run/report roots, excluding \code{*.pt},
+\code{*.npy}, and \code{*.cbm}, and pushes \code{origin/main} without opening a
+pull request. Omitting the job ID publishes all logs and lightweight outputs; a
+non-fast-forward pull stops without a merge commit, and unrelated staged paths
+remain outside the publisher commit.
 
 The synthetic smoke explicitly enumerates every expected method in all seven
 families and requires seeds 1 and 2 for each. Its current run tree is below

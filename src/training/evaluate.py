@@ -11,7 +11,6 @@ import torch
 
 from dataset import fetch_training_data, get_sizes
 from models import load_model
-from models.normalizations import get_normal_stats
 from runtime import (
     batch_size,
     dataset_path,
@@ -80,53 +79,44 @@ def _load_eval_model(
     )
 
 
-def evaluate_per_user_all(learner: TorchLearner, loader) -> dict[str, Any]:
-    """Return elementwise losses grouped by individual id."""
-    grouped: dict[str, dict[str, list[torch.Tensor]]] = {}
-    names: dict[str, str] = {}
-    learner.model.eval()
-    with torch.inference_mode():
-        for raw_batch in loader:
-            batch = learner._prepare_batch(raw_batch)
-            prediction = learner._predict(batch)
-            mean, std = get_normal_stats(batch.x, dim=-1, keepdim=True, detach=True)
-            metadata = batch.metadata or {}
-            ids = metadata.get("individual_ids")
-            if ids is None:
-                ids = torch.arange(batch.x.shape[0])
-            ids = ids.detach().cpu().tolist() if torch.is_tensor(ids) else list(ids)
-            batch_names = metadata.get("individual_names") or [str(value) for value in ids]
-            for loss_name, criterion in learner.eval_losses.items():
-                loss = criterion(
-                    prediction,
-                    batch.y,
-                    context=batch.x,
-                    mean=mean,
-                    std=std,
-                ).detach().cpu()
-                grouped.setdefault(loss_name, {})
-                for index, individual_id in enumerate(ids):
-                    key = str(int(individual_id))
-                    names[key] = str(batch_names[index])
-                    grouped[loss_name].setdefault(key, []).append(loss[index])
-    return {
-        "losses": {
-            loss_name: {
-                individual_id: torch.stack(values, dim=0)
-                for individual_id, values in per_loss.items()
-            }
-            for loss_name, per_loss in grouped.items()
-        },
-        "individual_names": names,
+def build_loss_payload(evaluation: Mapping[str, Any]) -> dict[str, Any]:
+    """Build the compact, row-aligned artifact for one evaluation split."""
+    losses = dict(evaluation.get("losses") or {})
+    metadata = dict(evaluation.get("metadata") or {})
+    lengths = {
+        int(value.shape[0])
+        for value in losses.values()
+        if torch.is_tensor(value) and value.ndim > 0
     }
+    if len(lengths) > 1:
+        raise ValueError(f"loss tensors have inconsistent sample counts: {sorted(lengths)}")
+    sample_count = next(iter(lengths), 0)
+    for key in ("individual_ids", "query_ids", "run_ids"):
+        value = metadata.get(key)
+        if value is not None and torch.as_tensor(value).numel() != sample_count:
+            raise ValueError(f"metadata {key!r} is not aligned with {sample_count} losses")
+    if sample_count and metadata.get("individual_ids") is None:
+        raise ValueError("complete TimeTensors evaluation requires stable individual_ids")
+    payload = {"losses": losses, "metadata": metadata, "summaries": {}}
+    payload["summaries"] = summarize_per_user(payload)
+    return payload
 
 
-def summarize_per_user(per_user: Mapping[str, Any]) -> dict[str, torch.Tensor]:
-    """Return equal-user means and the worst-user 10% tail for each metric."""
+def summarize_per_user(payload: Mapping[str, Any]) -> dict[str, torch.Tensor]:
+    """Aggregate aligned elementwise losses into equal-user and W10 metrics."""
+    ids = (payload.get("metadata") or {}).get("individual_ids")
+    if ids is None:
+        return {}
+    ids = torch.as_tensor(ids, dtype=torch.long).reshape(-1)
+    if ids.numel() == 0:
+        return {}
     summary: dict[str, torch.Tensor] = {}
-    for metric, users in (per_user.get("losses") or {}).items():
+    for metric, values in (payload.get("losses") or {}).items():
+        values = torch.as_tensor(values).float()
+        if values.shape[0] != ids.numel():
+            raise ValueError(f"loss {metric!r} is not aligned with individual_ids")
         user_means = torch.stack(
-            [torch.as_tensor(values).float().mean() for values in users.values()]
+            [values[ids == individual_id].mean() for individual_id in torch.unique(ids, sorted=True)]
         )
         tail = max(1, math.ceil(0.1 * user_means.numel()))
         summary[f"user_mean_{metric}"] = user_means.mean()
@@ -134,18 +124,56 @@ def summarize_per_user(per_user: Mapping[str, Any]) -> dict[str, torch.Tensor]:
     return summary
 
 
-def plot_example_prediction(learner: TorchLearner, loader, *, save_path: str | Path | None = None):
-    """Plot one prediction example; save only when ``save_path`` is provided."""
+def merge_loss_payloads(
+    payloads: list[Mapping[str, Any]],
+    *,
+    report_equal_user_metrics: bool = False,
+) -> dict[str, Any]:
+    """Concatenate aligned split payloads without materializing per-user copies."""
+    if not payloads:
+        return {"losses": {}, "metadata": {}, "summaries": {}}
+    metric_names = set(payloads[0].get("losses") or {})
+    if any(set(payload.get("losses") or {}) != metric_names for payload in payloads[1:]):
+        raise ValueError("cannot merge evaluation payloads with different loss metrics")
+    losses = {
+        metric: torch.cat([torch.as_tensor(payload["losses"][metric]) for payload in payloads])
+        for metric in metric_names
+    }
+    metadata: dict[str, Any] = {}
+    for key in ("individual_ids", "query_ids", "run_ids"):
+        values = [(payload.get("metadata") or {}).get(key) for payload in payloads]
+        if all(value is not None for value in values):
+            metadata[key] = torch.cat([torch.as_tensor(value).reshape(-1) for value in values])
+        elif any(value is not None for value in values):
+            raise ValueError(f"metadata {key!r} must be present in every merged payload")
+    names: dict[str, str] = {}
+    for payload in payloads:
+        names.update((payload.get("metadata") or {}).get("individual_names") or {})
+    if names:
+        metadata["individual_names"] = names
+    merged = {"losses": losses, "metadata": metadata, "summaries": {}}
+    summaries = summarize_per_user(merged)
+    if report_equal_user_metrics:
+        summaries.update(
+            {
+                metric: summaries[f"user_mean_{metric}"]
+                for metric in metric_names
+            }
+        )
+    merged["summaries"] = summaries
+    return merged
+
+
+def plot_example_prediction(example: Mapping[str, torch.Tensor], *, save_path: str | Path | None = None):
+    """Plot an example captured during evaluation without another inference."""
+    import matplotlib
+
+    matplotlib.use("Agg", force=True)
     import matplotlib.pyplot as plt
 
-    raw_batch = next(iter(loader))
-    batch = learner._prepare_batch(raw_batch)
-    learner.model.eval()
-    with torch.inference_mode():
-        pred = learner._predict(batch).detach().cpu()
-    x = batch.x.detach().cpu()[0, 0]
-    y = batch.y.detach().cpu()[0, 0]
-    p = pred[0, 0]
+    x = example["inputs"][0, 0]
+    y = example["targets"][0, 0]
+    p = example["predictions"][0, 0]
     lags = x.numel()
     fig, ax = plt.subplots(figsize=(12, 4))
     ax.plot(range(lags), x, label="lookback")
@@ -197,31 +225,31 @@ def eval_stage(
     selected = selected or list(loaders)
     out_dir = run_dir(config)
     all_losses = {}
-    per_user = {}
+    example = None
+    plot_example = bool(evaluation.get("plot_example", False))
     for split in selected:
         if split not in loaders:
             LOGGER.warning("missing evaluation split=%s", split)
             continue
-        all_losses[split] = learner.evaluate(
+        result = learner.evaluate(
             loaders[split],
             return_mode="all",
             runs=int(evaluation.get("runs", 1)),
             seed=seed(config),
-        )["losses"]
-        per_user[split] = evaluate_per_user_all(learner, loaders[split])
-        all_losses[split].update(summarize_per_user(per_user[split]))
+            capture_example=plot_example and example is None,
+        )
+        all_losses[split] = build_loss_payload(result)
+        if example is None:
+            example = result.get("example")
     all_path = save_torch(all_losses, out_dir / "all_losses.pt")
-    per_user_path = save_torch(per_user, out_dir / "per_user_all_losses.pt")
     example_path = None
-    if bool(evaluation.get("plot_example", False)) and selected:
+    if plot_example and example is not None:
         example_path = Path(evaluation.get("example_plot_path", out_dir / "example_prediction.pdf"))
-        plot_example_prediction(learner, loaders[selected[0]], save_path=example_path)
+        plot_example_prediction(example, save_path=example_path)
         LOGGER.info("saved example_prediction=%s", example_path.name)
     return {
         "all_losses": all_losses,
-        "per_user_all_losses": per_user,
         "all_losses_path": Path(all_path),
-        "per_user_all_losses_path": Path(per_user_path),
         "example_prediction_path": example_path,
         "learner": learner,
         "loaders": loaders,
