@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from experiment_runs import (
+from pipeline.runs import (
     ManifestError,
     allocate_run,
     complete_launch,
@@ -105,6 +105,23 @@ class ExperimentRunsTest(unittest.TestCase):
                 [choice.run_dir.name for choice in distinct],
                 ["run_1", "run_2"],
             )
+            latest = select_identity_runs(identity, config_policy="latest")
+            self.assertEqual([choice.run_dir.name for choice in latest], ["run_2"])
+            averaged_configs = select_identity_runs(identity, config_policy="average")
+            self.assertEqual(
+                [choice.run_dir.name for choice in averaged_configs],
+                ["run_0", "run_2"],
+            )
+            self.assertEqual({choice.label for choice in averaged_configs}, {"ridge"})
+            averaged_repeats = select_identity_runs(
+                identity,
+                requested_pipeline={"steps": 20},
+                repeat_policy="average",
+            )
+            self.assertEqual(
+                [choice.run_dir.name for choice in averaged_repeats],
+                ["run_1", "run_2"],
+            )
 
     def test_single_dependency_resolution_rejects_ambiguous_pipeline_configs(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -171,6 +188,20 @@ class ExperimentRunsTest(unittest.TestCase):
                 launch_id="downstream_full",
             )
             self.assertEqual((full_result.run_dir.name, full_result.action), ("run_1", "new"))
+            self._complete(full_result)
+
+            selected = select_identity_runs(downstream_identity)
+            self.assertEqual(len(selected), 2)
+            self.assertTrue(
+                all("dependency.extraction.pipeline.steps" in item.label for item in selected)
+            )
+            filtered = select_identity_runs(
+                downstream_identity,
+                requested_pipeline={
+                    "dependency.extraction": {"pipeline": {"steps": 20}}
+                },
+            )
+            self.assertEqual([item.run_dir for item in filtered], [full_result.run_dir])
 
     def test_obsolete_schema_is_rejected(self):
         with tempfile.TemporaryDirectory() as folder:

@@ -5,7 +5,7 @@ FAMILY=central_per_user
 source "$(dirname "${BASH_SOURCE[0]}")/benchmark_common.sh"
 OUT_ROOT="$ROOT/outputs/central_per_user"
 if [ "$EXPERIMENT_MODE" = ultra ]; then
-  DEFAULT_USER_MODELS="patchtst chronos"
+  DEFAULT_USER_MODELS="patchtst chronos2"
 else
   DEFAULT_USER_MODELS="patchtst"
 fi
@@ -30,15 +30,15 @@ run_training() {
             +model.name=patchtst +model.path=patchtst +normalization.name=instance \
             +training.loss=nmse +experiment.training_scope="$scope"
         fi
-        if [[ " ${USER_MODELS[*]} " == *" chronos "* ]]; then
+        if [[ " ${USER_MODELS[*]} " == *" chronos2 "* ]]; then
           cross_learning=false; [ "$scope" = central ] && cross_learning=true
           MODEL_CONFIG_ORDER=scope
           MODEL_CONFIG_VALUES=("scope=$scope")
           TABLE_ROW_CONFIG=scope
           TABLE_COLUMN_CONFIG=
-          CASE_DISPLAY_NAME="chronos_${scope}"
-          run_case scripts.experiment "$dataset" "$setting" chronos \
-            +model.name=chronos +model.path=chronos +normalization.name=identity \
+          CASE_DISPLAY_NAME="chronos2_${scope}"
+          run_case scripts.experiment "$dataset" "$setting" chronos2 \
+            +model.name=chronos2 +model.path=chronos2 +normalization.name=identity \
             +model.kwargs.weights_path="$CHRONOS_WEIGHTS_PATH" \
             +model.kwargs.cross_learning="$cross_learning" \
             ++training.epochs=0 +experiment.training_scope="$scope"
@@ -51,10 +51,15 @@ run_training() {
 run_tables() {
   METHOD_ARG="$(IFS=,; echo "${METHODS[*]}")"
   write_table combined mse "$METHOD_ARG"
+  write_table combined user_mse "$METHOD_ARG"
   write_table combined w10_mse "$METHOD_ARG"
 }
 
-TABLE_REQUIRED_OUTPUTS=("$OUT_ROOT/results_combined_mse.tex" "$OUT_ROOT/results_combined_w10_mse.tex")
+TABLE_REQUIRED_OUTPUTS=(
+  "$OUT_ROOT/results_combined_mse.tex"
+  "$OUT_ROOT/results_combined_user_mse.tex"
+  "$OUT_ROOT/results_combined_w10_mse.tex"
+)
 TABLE_EXPECTED_METHODS=("${METHODS[@]}")
 log_section "workflow start family=central_per_user mode=$EXPERIMENT_MODE stages=$STAGES_SPEC"
 source "$ROOT/src/slurm/stage_train.sh"

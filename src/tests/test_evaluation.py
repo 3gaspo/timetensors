@@ -13,8 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from dataset.dataset import TimeSeriesData, fetch_training_data, save_data
-from training.evaluate import eval_stage
+from data import TimeSeriesData, fetch_training_data, save_data
+from training.evaluate import build_loss_payload, eval_stage, merge_loss_payloads
 from training.losses import get_losses
 from training.pipeline import TorchLearner
 
@@ -97,10 +97,37 @@ def main() -> None:
         assert set(metadata["individual_ids"].tolist()) == {11, 29}
         assert metadata["individual_names"] == {"11": "alpha", "29": "beta"}
         assert torch.equal(metadata["run_ids"], torch.zeros(losses.shape[0], dtype=torch.int32))
-        assert {"user_mean_mse", "w10_mse"} <= set(payload["summaries"])
+        for metric in payload["losses"]:
+            assert {
+                metric,
+                f"std_{metric}",
+                f"user_{metric}",
+                f"std_user_{metric}",
+                f"w10_{metric}",
+            } <= set(payload["summaries"])
         assert result["all_losses_path"].is_file()
         assert result["example_prediction_path"].is_file()
         assert not (result["all_losses_path"].parent / "per_user_all_losses.pt").exists()
+
+        first_user = build_loss_payload(
+            {
+                "losses": {"mse": torch.tensor([1.0, 1.0, 1.0])},
+                "metadata": {"individual_ids": torch.tensor([11, 11, 11])},
+            }
+        )
+        second_user = build_loss_payload(
+            {
+                "losses": {"mse": torch.tensor([9.0])},
+                "metadata": {"individual_ids": torch.tensor([29])},
+            }
+        )
+        merged = merge_loss_payloads([first_user, second_user])
+        summaries = merged["summaries"]
+        assert torch.isclose(summaries["mse"], torch.tensor(3.0))
+        assert torch.isclose(summaries["std_mse"], torch.sqrt(torch.tensor(12.0)))
+        assert torch.isclose(summaries["user_mse"], torch.tensor(5.0))
+        assert torch.isclose(summaries["std_user_mse"], torch.tensor(4.0))
+        assert torch.isclose(summaries["w10_mse"], torch.tensor(9.0))
 
     print("test_evaluation: ok")
 

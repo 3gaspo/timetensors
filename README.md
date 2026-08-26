@@ -6,20 +6,24 @@ TimeTensors is a time-series forecasting benchmark focused on how experimental p
 
 ```text
 src/
-  conf/       Hydra configuration
-  dataset/    CSV/tensor loading, splits, sampling, and statistics
-  models/     forecasting models and normalization layers
-  training/   losses, PyTorch/sklearn training, evaluation, per-user runs
-  scripts/    runnable Hydra entrypoints
-  slurm/      benchmark implementations (`.sh`)
-  visu/       plots, notebooks, dashboards, and result tables
-  tests/      lightweight smoke tests
+  conf/             Hydra configuration
+  data/             cohesive core, sampling, frames, I/O, split, statistic, and loader owners
+  external_models/  pinned source packages and thin official-model adapters
+  model_loading/    shared baselines, augmentation, factories, and sklearn adapter
+  proposal/         GRevIN and proposed normalization mechanisms
+  training/         losses, fitting, evaluation, and per-user runs
+  pipeline/         runtime/config resolution and run manifests
+  results/          result aggregation and tables
+  visualization/    plots, notebooks, and dashboards
+  scripts/          runnable Hydra entrypoints
+  slurm/            benchmark implementations (`.sh`)
+  tests/            lightweight smoke tests
 datasets/     remote dataset payloads
 weights/      remote pretrained weights
 outputs/      generated models, metrics, figures, and tables
 logs/         runtime and Slurm logs
 latex/        experiment protocol
-01_*.slurm ... 07_*.slurm   ordered submission files
+01_*.slurm ... 08_*.slurm   ordered submission files
 ```
 
 All Python commands below are run from the repository root with `PYTHONPATH=src`.
@@ -32,7 +36,8 @@ python -m scripts.load_dataset     # dataset stage only
 python -m scripts.train            # PyTorch training only
 python -m scripts.evaluate         # evaluation only
 python -m scripts.train_sklearn    # sklearn linear regression
-python -m visu.results_table outputs/reference --show-std
+python -m scripts.report outputs/reference --show-std
+python -m scripts.prepare_time_csv --source-root /path/to/TIME-ProcessedCSV
 ```
 
 Hydra accepts the experiment sections `data`, `task`, `model`, `normalization`, `training`, `evaluation`, `experiment`, and `output`. A typical run is:
@@ -68,15 +73,20 @@ allocated by a manifest-aware numbered Slurm workflow.
 - Constant handling: remove individual constant windows independently in
   train/evaluation, or compare against dropping affected users from both.
 - Losses: `mse`, `mae`, `nmse`, `nmae`, and `relative_mse`.
-- Normalization: identity, global standard, global min-max, instance min-max, instance normalization/RevIN, and the research variants retained under `models/`.
+- Normalization: identity, global standard, global min-max, instance min-max, instance normalization/RevIN, and the research variants isolated under `proposal/`.
 - Normalization classes use the acronymic type names `RevIN` and `GRevIN`
   without a redundant `Normalization` suffix.
-- Models: persistence and linear baselines, DLinear, PatchTST, Chronos, TabPFN, and sklearn linear regression.
+- Models: persistence and linear baselines, DLinear, PatchTST, Chronos-2,
+  Chronos-Bolt, TS-ICL, TiRex-2, TabPFN-TS, and sklearn linear regression.
 - Training scope: `experiment.training_scope=central` or `per_user`.
 - Evaluation performs one inference pass per configured run and stores each
   metric as one elementwise tensor aligned with compact user, query, and run
-  ID tensors. Equal-user means and `w10_*`, the mean loss of the worst 10% of
-  users, are derived from those rows without another inference pass.
+  ID tensors. For every evaluated loss `<metric>`, scalar summaries record
+  `<metric>` (element-weighted mean), `std_<metric>` (population standard
+  deviation of elements), `user_<metric>` (equal-user mean),
+  `std_user_<metric>` (population standard deviation across user means), and
+  `w10_<metric>` (mean of the worst 10% of user means). These are derived from
+  the aligned rows without another inference pass.
 
 Global standard and min-max statistics are computed from accessible training
 lookbacks under the same cutoff and target-split rules. Final artifacts are
@@ -97,6 +107,7 @@ The jobs under `src/slurm/` cover:
 - normalization methods, including global min-max;
 - linear and sklearn baselines;
 - central versus per-user PatchTST and Chronos with W10 metrics.
+- frozen-foundation-model evaluation through the same aligned loss contract.
 
 Submit only the numbered `.slurm` files in the project root. Their names show
 the recommended order. Every front is a complete resumable workflow with
@@ -114,6 +125,9 @@ remain under `src/slurm/`:
 - `06_linear_models.slurm` -> `benchmark_linear_models.sh` compares trainable/closed-form linear models and
   saves coefficient plots.
 - `07_central_per_user.slurm` -> `benchmark_central_per_user.sh` compares centralized and per-user training.
+- `08_foundation_models.slurm` -> `benchmark_foundation_models.sh` evaluates
+  Chronos-2, Chronos-Bolt, TS-ICL, and TabPFN-TS without training. TiRex-2
+  remains adapter-supported but is commented out of the launch profile.
 - `benchmark_common.sh` resolves resources, applies the common split/stride and
   training controls, and launches exactly one Python task. `stage_train.sh`
   and `stage_tables.sh` execute the separate stages. These internal scripts are
@@ -146,6 +160,7 @@ Every benchmark job exposes the same quick check:
 EXPERIMENT_MODE=test sbatch 05_losses.slurm
 EXPERIMENT_MODE=full sbatch 05_losses.slurm
 EXPERIMENT_MODE=ultra sbatch 05_losses.slurm
+EXPERIMENT_MODE=test sbatch 08_foundation_models.slurm
 ```
 
 Use `EXPERIMENT_MODE=full`, then `ultra` after the test profile.
@@ -191,8 +206,11 @@ changes are manual rerun decisions; use `RUN_CONFLICT_POLICY=new` for another
 repeat with unchanged parameters. Change `schema_version` only for a deliberate
 global artifact-contract break.
 
-The current `schema_version` is 2. Schema 1 runs use the replaced duplicated
-per-user loss contract and must be rerun. Only completed manifests can enter a report.
+The current thesis-wide `schema_version` is 1. The manifest version describes
+the shared manifest structure, while TimeTensors' sole current project artifact
+is the single-pass aligned `all_losses.pt` contract. All outputs from the former
+duplicated per-user loss contract were deliberately deleted before the current
+full restart. Only completed manifests can enter a report.
 The overall run remains `running` with `ready_at_utc` while finished seed
 states are `ready`; completion is written immediately after that
 configuration's producer process returns successfully with every required
@@ -204,20 +222,22 @@ the next `run_n` for changed pipeline configs. `overwrite_path` and `new` are
 explicit alternatives. Reports support the common distinct/latest/average
 config policy and selected/latest/distinct/average repeat policy. Explicit
 pipeline filters select a pipeline configuration and must match even with one
-candidate. Exact-repeat selection is recorded in `SELECTED_RUNS.txt`, and every
+candidate. Nested pipeline and experiment fields, including embedded upstream
+scientific dependencies, use dotted filter keys and participate in distinct
+labels. Exact-repeat selection is recorded in `SELECTED_RUNS.txt`, and every
 `report_manifest.json` records requested filters and obtained inputs.
 
-The former result trees could not be migrated because synchronized seed folders
-lacked the excluded `all_losses.pt` payloads required to prove completion. They
-are preserved under `outputs/archive/legacy_pre_schema_v1_2026-08-07/` and are
-never consumed by current tables.
+No former result tree remains locally: `outputs/` and `logs/` were deliberately
+cleared before the full restart. Every desired configuration must be recomputed
+under the current code and artifact contract.
 
-The later remote commit `99b4d80` was imported without merging its pre-schema
-code under the commit-addressed `cluster_full_99b4d80/` archive directory. It
-contains a partial full constants run (132 of 270 intended seed runs) and the
-job-42527 log pair, but no sampling-family tree and no synchronized metric
-payload from which to rebuild a policy table. The quantitative coverage and
-failure analysis is retained in `latex/executive_summary.tex`.
+The later remote commit `99b4d80` was previously imported and inspected without
+merging its pre-schema code. Its local archive copy was removed during the full
+restart. The historical payload contained a partial full constants run (132 of
+270 intended seed runs) and the job-42527 log pair, but no sampling-family tree
+or synchronized metric payload from which to rebuild a policy table. The
+quantitative coverage and failure analysis is retained in
+`latex/executive_summary.tex`; none of those former files is reusable.
 
 The recommended execution order is:
 
@@ -232,6 +252,8 @@ The recommended execution order is:
 6. Run `05_losses.slurm` with `EXPERIMENT_MODE=full`.
 7. Run `06_linear_models.slurm`, followed by `07_central_per_user.slurm`, with
    `EXPERIMENT_MODE=full`.
+8. Run `08_foundation_models.slurm` after its test profile to compare every
+   frozen adapter on the same TimeTensors evaluation rows.
 
 The reference benchmark uses non-trainable persistence, instance-normalized
 nMSE PatchTST with constant users removed, and frozen Chronos-2. The linear
@@ -242,10 +264,11 @@ pass them through `REFERENCE_PATCHTST_NORM`, `REFERENCE_LOSS`,
 `REFERENCE_DROP_TRAIN_CONSTANT_USERS`, and
 `REFERENCE_DROP_EVAL_CONSTANT_USERS`.
 
-Dataset and weight roots are resolved in this order: an explicit `DATA_ROOT`
-or `WEIGHTS_ROOT`, a non-empty project-local directory, a non-empty parent
-directory, then one additional shared-parent candidate. When this repository
-is copied elsewhere, set the two environment variables explicitly.
+Each requested dataset and weight is resolved in this order: an explicit
+`DATA_ROOT` or `WEIGHTS_ROOT`, the project-local directory, the immediate
+project parent, then one additional nested-workspace shared-parent candidate.
+The first candidate containing that resource is used. When this repository is
+copied elsewhere, set the two environment variables explicitly.
 If a selected dataset has no `*values.pt` tensor payload, its first pending
 configuration rebuilds the tensors automatically. `REBUILD_DATASETS=true`
 forces a rebuild even when tensors exist; do not force concurrent rebuilds of
@@ -259,6 +282,37 @@ run values override other fields, while every `drop_users` list is merged
 additively. The selected path and applied keys are timestamped in the job log.
 ETTh1 is evaluated with every non-date variable, so its source CSV must contain
 all seven variables rather than only `OT`.
+
+Prepared TIME panels use the same portable wide-CSV contract as TSFM evaluation
+and online adaptation. Build a filtered local or Hugging Face snapshot with
+`python -m scripts.prepare_time_csv`; it writes datasets below
+`datasets/time/<name>/` and a cadence-aware `datasets/time/catalog.json`.
+Evaluate a prepared panel by passing a slash-qualified dataset name, for
+example `DATASETS_OVERRIDE='time/cphl_h'`.
+
+## External model provenance
+
+`external_models/patchtst/` is source-adapted from
+`yuqinie98/PatchTST` revision
+`204c21efe0b39603ad6e2ca640ef5896646ab1a9`; unrelated pretraining paths and
+the internal RevIN layer are omitted because this project owns normalization.
+`external_models/dlinear/` is source-adapted from
+`cure-lab/LTSF-Linear` revision
+`0c113668a3b88c4c4ee586b8c5ec3e539c4de5a6`; only the local
+`(batch, dim, time)` tensor boundary differs. These package snapshots are
+byte-identical in the active projects that reuse them.
+
+The `chronos2`, `chronos_bolt`, `ts_icl`, `tirex2`, and `tabpfn_ts` keys are
+the only accepted foundation-model aliases and use
+the same byte-identical thin adapters as TSFM evaluation and online adaptation.
+Chronos-2 and Chronos-Bolt use the public `chronos-forecasting==2.0.1`
+pipelines. TS-ICL, TiRex-2, and TabPFN-TS use thin adapters over
+`tsicl==0.2.0`, `tirex-2==0.2.1`, and `tabpfn==6.3.1`; their
+architectures and released inference paths are not copied or reimplemented.
+TimeTensors adds normalization and optional covariate augmentation in
+`TimeTensorModel` around the canonical adapter; wrapper choices never create a
+second model alias. Adapters that do not support covariates reject non-empty
+covariate inputs.
 
 All non-filtering launchers default to dropping users with accessible constant
 look-backs in both training and evaluation. The shared

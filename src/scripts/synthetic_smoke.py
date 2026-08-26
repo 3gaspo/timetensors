@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Union
 import numpy as np
 import pandas as pd
 
-from experiment_runs import (
+from pipeline.runs import (
     SelectedRun,
     allocate_run,
     identity_path,
@@ -301,11 +301,15 @@ def fit_closed_form(train: Windows, normalization: str, ridge: float = 0.0) -> t
 
 
 def metrics(prediction: np.ndarray, windows: Windows) -> dict[str, float]:
-    row_mse = np.mean((prediction - windows.y) ** 2, axis=1)
+    squared_errors = (prediction - windows.y) ** 2
+    row_mse = np.mean(squared_errors, axis=1)
     user_mse = np.asarray([row_mse[windows.user == user].mean() for user in np.unique(windows.user)])
     worst_count = max(1, math.ceil(0.1 * len(user_mse)))
     return {
-        "mse": float(row_mse.mean()),
+        "mse": float(squared_errors.mean()),
+        "std_mse": float(squared_errors.std()),
+        "user_mse": float(user_mse.mean()),
+        "std_user_mse": float(user_mse.std()),
         "w10_mse": float(np.sort(user_mse)[-worst_count:].mean()),
     }
 

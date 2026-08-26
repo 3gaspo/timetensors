@@ -11,10 +11,15 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from models.models import ModelConfig, load_model
-from models.baselines import PeriodicLinearBaseline
-from models import GRevIN, RevIN, build_grevin_normalization, build_normalization
-from runtime import model_specs
+from model_loading.forecast import (
+    BASELINE_REGISTRY,
+    FOUNDATION_MODEL_ALIASES,
+    ModelConfig,
+    load_model,
+)
+from model_loading.baselines import PeriodicLinearBaseline
+from proposal import GRevIN, RevIN, build_grevin_normalization, build_normalization
+from pipeline.runtime import model_specs
 
 
 def _config(name: str, **kwargs) -> ModelConfig:
@@ -107,6 +112,52 @@ def main() -> None:
     for shape in [(168, 2, 24), (672, 2, 168), (24, 2, 24), (1344, 2, 336)]:
         for name in benchmark_models:
             _assert_generated_config_forward(name, shape)
+
+    shared_foundation = FOUNDATION_MODEL_ALIASES
+    for name in shared_foundation:
+        specs = model_specs({"model": {"name": name, "path": name}}, (512, 1, 64))
+        assert specs.kwargs is not None
+        kwargs = dict(specs.kwargs)
+        assert (kwargs["lags"], kwargs["dim"], kwargs["horizon"]) == (512, 1, 64)
+        assert name in BASELINE_REGISTRY
+    assert shared_foundation == (
+        "chronos2",
+        "chronos_bolt",
+        "ts_icl",
+        "tirex2",
+        "tabpfn_ts",
+    )
+    for removed in (
+        "chronos",
+        "chronos-2",
+        "chronos-bolt",
+        "tsicl",
+        "ts-icl",
+        "tirex_2",
+        "tirex-2",
+        "tyrex2",
+        "tabpfn",
+        "tabpfn-ts",
+    ):
+        assert removed not in BASELINE_REGISTRY
+        try:
+            load_model(_config(removed))
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"removed alias {removed!r} should not resolve")
+    try:
+        load_model(
+            ModelConfig(
+                name="custom_chronos",
+                path="external_models.chronos2.Chronos2",
+                kwargs={"lags": 8, "dim": 1, "horizon": 3},
+            )
+        )
+    except ValueError as error:
+        assert "canonical alias" in str(error)
+    else:
+        raise AssertionError("foundation import paths must not bypass canonical aliases")
 
     try:
         load_model(_config("DLinear"))

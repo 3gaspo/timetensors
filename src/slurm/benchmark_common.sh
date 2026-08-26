@@ -59,8 +59,8 @@ timetensors_on_exit() {
   local status=$?
   trap - EXIT
   if [ "$status" -ne 0 ]; then
-    python -m experiment_runs interrupt-launch --root "$ROOT/outputs" --launch-id "$EXPERIMENT_LAUNCH_ID" || true
-    elif python -m experiment_runs complete-launch --root "$ROOT/outputs" --launch-id "$EXPERIMENT_LAUNCH_ID" >/dev/null; then
+    python -m pipeline.runs interrupt-launch --root "$ROOT/outputs" --launch-id "$EXPERIMENT_LAUNCH_ID" || true
+    elif python -m pipeline.runs complete-launch --root "$ROOT/outputs" --launch-id "$EXPERIMENT_LAUNCH_ID" >/dev/null; then
       :
     else
       status=$?
@@ -122,8 +122,8 @@ stage_requested() {
 }
 for stage in "${STAGE_LIST[@]}"; do
   case "$stage" in
-    train|tables) ;;
-    *) log_error "STAGES must contain only train,tables (got $STAGES_SPEC)"; exit 2 ;;
+    train|evaluate|tables) ;;
+    *) log_error "STAGES must contain only train,evaluate,tables (got $STAGES_SPEC)"; exit 2 ;;
   esac
 done
 
@@ -209,12 +209,12 @@ run_case() {
   for seed in "${SEEDS[@]}"; do allocation_args+=(--seed "$seed"); done
   if [ -f "$config_path" ]; then allocation_args+=(--input "dataset_config=$config_path"); fi
   if [ -n "${RUN_INDEX:-}" ]; then allocation_args+=(--run-index "$RUN_INDEX"); fi
-  IFS=$'\t' read -r run_dir run_action run_signature < <(python -m experiment_runs allocate "${allocation_args[@]}")
+  IFS=$'\t' read -r run_dir run_action run_signature < <(python -m pipeline.runs allocate "${allocation_args[@]}")
   if [ "$run_action" = skip ]; then
     log "skip complete dataset=$dataset lags=$lags horizon=$horizon backbone=$backbone model_configs=${MODEL_CONFIG_VALUES[*]:-none} run=$run_dir"
     return
   fi
-  run_seeds_csv="$(python -m experiment_runs pending-seeds --run-dir "$run_dir")"
+  run_seeds_csv="$(python -m pipeline.runs pending-seeds --run-dir "$run_dir")"
   IFS=, read -ra pending_seeds <<< "$run_seeds_csv"
   if [ "${#pending_seeds[@]}" -eq 0 ] || [ -z "${pending_seeds[0]:-}" ]; then
     log_error "allocated non-skipped run has no pending seeds: $run_dir"
@@ -238,7 +238,7 @@ run_case() {
     config_args+=(+data.config_path="$case_data_root/$dataset/config.json")
   fi
   for seed in "${pending_seeds[@]}"; do
-    python -m experiment_runs status --run-dir "$run_dir" --status running --seed "$seed"
+    python -m pipeline.runs status --run-dir "$run_dir" --status running --seed "$seed"
   done
   log_section "configuration dataset=$dataset lags=$lags horizon=$horizon backbone=$backbone model_configs=${MODEL_CONFIG_VALUES[*]:-none} module=$module requested_seeds=$SEEDS_CSV run_seeds=$run_seeds_csv run=$run_dir computation_signature=$run_signature data_root=$case_data_root train_sampling=$TRAIN_MODE train_stride=1 eval_sampling=all eval_stride=$horizon batch_size=$effective_batch learning_rate=$LR epochs=$EPOCHS rebuild_dataset=$rebuild rebuild_reason=$rebuild_reason overrides=$*"
   srun --ntasks=1 python -m "$module" \
@@ -276,11 +276,11 @@ run_case() {
       log_error "training completed without required result $seed_root/all_losses.pt"
       exit 1
     fi
-    python -m experiment_runs status --run-dir "$run_dir" --status ready --seed "$seed" --artifact "seed_$seed/all_losses.pt"
+    python -m pipeline.runs status --run-dir "$run_dir" --status ready --seed "$seed" --artifact "seed_$seed/all_losses.pt"
   done
   for seed in "${SEEDS[@]}"; do required_artifacts+=(--artifact "seed_$seed/all_losses.pt"); done
-  python -m experiment_runs ready --run-dir "$run_dir" "${required_artifacts[@]}"
-  python -m experiment_runs complete --run-dir "$run_dir" --launch-id "$EXPERIMENT_LAUNCH_ID"
+  python -m pipeline.runs ready --run-dir "$run_dir" "${required_artifacts[@]}"
+  python -m pipeline.runs complete --run-dir "$run_dir" --launch-id "$EXPERIMENT_LAUNCH_ID"
   unset CASE_BATCH_SIZE CASE_DISPLAY_NAME
   MODEL_CONFIG_VALUES=()
 }
@@ -301,7 +301,7 @@ write_table() {
     for pair in ${TABLE_PIPELINE_CONFIGS}; do table_args+=(--pipeline-config "$pair"); done
   fi
   if [ -n "${TABLE_PURPOSE:-}" ]; then table_args+=(--purpose "$TABLE_PURPOSE"); fi
-  srun --ntasks=1 python -m visu.results_table "${table_args[@]}"
+  srun --ntasks=1 python -m scripts.report "${table_args[@]}"
 }
 
 verify_table_inputs() {

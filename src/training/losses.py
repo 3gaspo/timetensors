@@ -9,7 +9,7 @@ from typing import Any
 import torch
 import torch.nn as nn
 
-from models.normalizations import get_normal_stats
+from proposal.normalizations import get_normal_stats
 
 
 def _criterion(name: str, *, reduction: str = "mean", kwargs: Mapping[str, Any] | None = None) -> nn.Module:

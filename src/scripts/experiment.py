@@ -6,8 +6,8 @@ import logging
 from time import perf_counter
 from typing import Any, Mapping
 
-from dataset.load import build_dataset_stage
-from runtime import (
+from data.load import build_dataset_stage
+from pipeline.runtime import (
     config_bool,
     device,
     pretrained_path,
@@ -23,7 +23,7 @@ from runtime import (
 from training.evaluate import eval_stage
 from training.per_user import train_per_user
 from training.train import train_stage
-from visu.experiment_plots import save_criterion_loss_plot
+from visualization.experiment_plots import save_criterion_loss_plot
 
 
 LOGGER = logging.getLogger(__name__)

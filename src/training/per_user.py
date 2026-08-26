@@ -5,8 +5,8 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any, Mapping
 
-from runtime import run_dir, save_name, save_torch, section, to_plain_config
-from visu.experiment_plots import save_criterion_loss_plot
+from pipeline.runtime import run_dir, save_name, save_torch, section, to_plain_config
+from visualization.experiment_plots import save_criterion_loss_plot
 
 from .evaluate import eval_stage, merge_loss_payloads
 from .train import fetch_loaders, train_stage
@@ -58,7 +58,7 @@ def train_per_user(config: Mapping[str, Any]) -> dict[str, Any]:
             split_payloads.setdefault(split, []).append(payload)
 
     all_losses = {
-        split: merge_loss_payloads(payloads, report_equal_user_metrics=True)
+        split: merge_loss_payloads(payloads)
         for split, payloads in split_payloads.items()
     }
 

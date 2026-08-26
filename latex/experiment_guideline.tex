@@ -53,7 +53,7 @@
 
 \title{\vspace{-1.5em}\textbf{TimeTensors: Forecasting Benchmark}\\[2mm]\large Experiment Guideline\vspace{-0.4em}}
 \author{Gaspard Berthelier}
-\date{9 August 2026}
+\date{25 August 2026}
 
 \begin{document}
 \maketitle
@@ -62,7 +62,7 @@
 \begin{abstract}
 TimeTensors studies how data selection, sampling, normalization, optimization
 loss, model class, and training scope affect time-series forecasts. This
-document defines the forecasting task, the seven implemented experiment
+document defines the forecasting task, the eight implemented experiment
 families, and the exact common protocol used by their launchers.
 \end{abstract}
 
@@ -287,7 +287,9 @@ The sweep holds instance normalization fixed and changes only the training
 criterion. Its tables compare every run using data-space test MSE, so training
 curve magnitudes from different objectives are not directly comparable.
 Complete run artifacts additionally retain MSE, nMSE, MAE, nMAE, relative MSE,
-and per-user losses.
+and their row-aligned user, query, and run identities. Per-user and worst-tail
+summaries are derived from those rows rather than stored as duplicated loss
+tensors.
 
 \section{Experiment 6: linear models}
 \label{sec:linear}
@@ -340,17 +342,43 @@ $\ell_{u,i}$ denote one such error. Define
   M_{\mathrm{elem}}=\frac{\sum_u\sum_i\ell_{u,i}}{\sum_u n_u},\qquad
   M_{\mathrm{user}}=\frac1U\sum_u\overline\ell_u.
 \]
+With $N=\sum_u n_u$, the two population dispersions are
+\[
+  S_{\mathrm{elem}}
+  =\sqrt{\frac1N\sum_u\sum_i(\ell_{u,i}-M_{\mathrm{elem}})^2},\qquad
+  S_{\mathrm{user}}
+  =\sqrt{\frac1U\sum_u(\overline\ell_u-M_{\mathrm{user}})^2}.
+\]
 For $q=\max(1,\lceil0.1U\rceil)$ and $\operatorname{Top}_q$ the users with
 the $q$ largest means, the tail metric is
 \[
   \Wten(\ell)=\frac1q\sum_{u\in\operatorname{Top}_q}\overline\ell_u.
 \]
-The current central artifacts store elementwise MSE, hence their reported
-\code{mse} reduces to $M_{\mathrm{elem}}$. The per-user merger explicitly
-overwrites \code{mse} with $M_{\mathrm{user}}$. The combined MSE table therefore
-uses these two different weightings, while the W10 table uses the same
-equal-user tail definition for both scopes. This is the implemented artifact
-contract and should be stated whenever the combined table is interpreted.
+Central and per-user artifacts use the same metric names and reductions.
+For each loss name $m$, \code{m} is $M_{\mathrm{elem}}$,
+\code{std_m} is $S_{\mathrm{elem}}$, \code{user_m} is
+$M_{\mathrm{user}}$, \code{std_user_m} is $S_{\mathrm{user}}$, and
+\code{w10_m} is $\Wten$. Thus \code{mse}, \code{user_mse}, and
+\code{w10_mse} compare central and per-user models under identical weighting
+rules; the same five summaries are recorded for nMSE, MAE, nMAE, and relative
+MSE whenever those losses are evaluated.
+
+\section{Experiment 8: frozen foundation models}
+\label{sec:foundation}
+
+The eighth family evaluates five frozen adapters without optimizer updates:
+Chronos-2, Chronos-Bolt, TS-ICL, and TabPFN-TS. TiRex-2 remains implemented but
+is excluded from the launcher until explicitly restored. Every active adapter receives
+the same TimeTensors query rows and writes the aligned five-metric loss
+contract. Model-native preprocessing and released checkpoint inference remain
+inside each official package; the evaluator only constrains accessible data,
+dates, and optional covariates.
+
+The root \code{08_foundation_models.slurm} defaults to
+\code{STAGES=evaluate,tables}. Test uses Electricity at $504{:}168$, seed 1.
+Full uses the common six-dataset, three-setting grid and seeds 1--3; ultra
+selects the same frozen model axis. Reports compare element-weighted MSE,
+equal-user MSE, and worst-10\%-user MSE.
 
 \section{Experimental details}
 \label{sec:details}
@@ -391,12 +419,19 @@ construction: portable top-level options are applied first, the
 \code{timetensors} object overrides them, explicit run values override both,
 and all \code{drop_users} lists are merged additively.
 
+Filtered TIME panels are prepared by \code{python -m scripts.prepare_time_csv}.
+The shared implementation selects an immutable
+\code{Real-TSF/TIME-ProcessedCSV} revision, merges only files with identical
+timestamp indices, and writes one portable wide CSV/config pair plus
+\code{datasets/time/catalog.json}. Prepared panels can be selected with a
+slash-qualified dataset name and use the same dataset-config precedence.
+
 \subsection{Models}
 
 \begin{table}[htbp]
 \centering
 \small
-\caption{Models exercised by the seven publication launchers.}
+\caption{Models exercised by the eight publication launchers.}
 \label{tab:models}
 \begin{tabularx}{\linewidth}{@{}lXl@{}}
 \toprule
@@ -408,10 +443,18 @@ Code name & Implemented forecast & Fit in this project \\
 \code{sklinear} & Multi-output scikit-learn \code{LinearRegression} over all accessible windows. & Closed-form OLS \\
 \code{dlinear} & Moving-average decomposition (kernel 25) followed by separate per-variable seasonal and trend maps $\reals^L\to\reals^H$. & Adam \\
 \code{patchtst} & Patches of length 16 and stride 8; three encoder layers, 16 heads, $d_{\rm model}=128$, $d_{\rm ff}=256$, learned positional encoding, and a flattened forecast head. & Adam \\
-\code{chronos} & Local frozen Chronos-2 pipeline; the wrapper selects the median quantile and optionally enables cross-learning. & Frozen \\
+\code{chronos2} & Thin official Chronos-2 adapter; TimeTensorModel may add configured covariates without changing this alias. & Frozen \\
+\code{chronos_bolt} & Thin official Chronos-Bolt adapter; non-empty covariates are rejected. & Frozen \\
+\code{ts_icl} & Official TS-ICL checkpoint and native preprocessing through a tensor adapter. & Frozen \\
+\code{tirex2} & Official TiRex-2 checkpoint, native preprocessing, and test-time augmentation through a tensor adapter. & Frozen \\
+\code{tabpfn_ts} & In-context TabPFN-TS inference through the official TabPFN package and checkpoint. & Frozen \\
 \bottomrule
 \end{tabularx}
 \end{table}
+
+These five foundation names are the sole lower-snake-case aliases shared with
+TSFM evaluation and online adaptation. Project wrappers compose around the
+same basic adapters and are configured independently of model identity.
 
 PatchTST uses attention dropout 0, encoder dropout 0.2, feed-forward/head
 dropout 0.2/0, GELU activations, and residual attention. DLinear and PatchTST
@@ -419,6 +462,17 @@ form the shared model axis: full uses PatchTST and ultra adds DLinear. The
 reference and linear experiments use their fixed method lists instead. The
 central/per-user family uses PatchTST in test and full, and adds Chronos-2 in
 ultra.
+
+\noindent PatchTST and DLinear are pinned source-adapted packages:
+\begin{flushleft}\small
+PatchTST upstream: \texttt{yuqinie98/PatchTST}\\
+Revision: \texttt{204c21efe0b39603ad6e2ca640ef5896646ab1a9}\\[2pt]
+DLinear upstream: \texttt{cure-lab/LTSF-Linear}\\
+Revision: \texttt{0c113668a3b88c4c4ee586b8c5ec3e539c4de5a6}
+\end{flushleft}
+The five frozen evaluation
+adapters and TIME preparation implementation are byte-identical to TSFM
+Evaluation and Online Adaptation.
 
 \subsection{Optimization, evaluation, and outputs}
 \thispagestyle{fancy}
@@ -436,14 +490,19 @@ Non-filtering families default to dropping users with an accessible constant
 or non-finite lookback in both training and evaluation. The constants family
 sets those controls per policy. The reference family exposes independent
 overrides for its PatchTST choices. Chronos-2 and persistence set $E=0$ and are
-evaluated without optimization.
+evaluated without optimization. Every model in the foundation family likewise
+sets $E=0$ and skips training.
 
-Evaluation saves elementwise MSE, nMSE, MAE, nMAE, and relative MSE on each
-selected split, together with losses grouped by user, equal-user summaries, and
-W10 summaries. Tables use \code{test1}, average each metric tensor within a
-seed, then report the mean and sample standard deviation across seeds. Each row
-uses an explicit $\times10^m$ scale. Every seed directory contains model,
-history, metadata, and loss artifacts.
+Evaluation performs one inference pass per configured run. On each selected
+split, \code{all_losses.pt} stores row-aligned elementwise MSE, nMSE, MAE,
+nMAE, and relative-MSE tensors; compact \code{individual_ids},
+\code{query_ids}, and \code{run_ids}; an ID-to-name map; and all five scalar
+element/user/tail summaries defined above. The optional example forecast is
+captured during that same pass. No \code{per_user_all_losses.pt} copy is written. Tables use \code{test1},
+average each selected metric within a seed, then report the mean and sample
+standard deviation across seeds. Each row uses an explicit $\times10^m$ scale.
+Every seed directory contains model, history, metadata, and the sole aligned
+loss artifact.
 
 \subsection{Result identities and manifests}
 Every family continues as
@@ -452,7 +511,8 @@ model-config folders are: \code{policy} for constants;
 \code{sampling_mode/batch_size} for sampling; \code{normalization} for
 normalizations; \code{loss} for losses; \code{normalization/loss} for the
 reference family; \code{normalization} with the linear method as backbone for
-linear models; and \code{scope} for central/per-user. No synthetic upper/lower
+linear models; \code{scope} for central/per-user; and \code{normalization} for
+foundation models. No synthetic upper/lower
 folder level is required.
 
 Training budget, optimizer, split, strides, and logging/plot controls are
@@ -465,7 +525,11 @@ configs, and seeds. Files are not fingerprinted for reuse; provenance is ignored
 and code/data reruns are manual. Only a global contract break changes the schema;
 \code{new} creates an unchanged-parameter repeat.
 
-The current contract uses \code{schema_version: 1} and four overall states:
+The current contract uses the thesis-wide \code{schema_version: 1}; this number
+versions the shared manifest structure rather than the project-specific loss
+payload. The former duplicated per-user outputs were deliberately deleted, so
+only newly computed runs using the sole aligned \code{all_losses.pt} contract
+can exist locally. The four overall states are
 \code{not_run}, \code{running}, \code{interrupted}, and \code{completed}; seed
 state may additionally be \code{ready}. The default
 \code{overwrite_exact} policy skips exact completion, resumes exact
@@ -478,27 +542,32 @@ later file hashing or synchronization checks. Tables support
 distinct/latest/average config handling and selected/latest/distinct/average
 repeat selection; explicit pipeline filters select configurations and must
 match even with one run. \code{SELECTED_RUNS.txt} stores exact-repeat selection
-and each report stores requested filters and obtained input manifests. Old synchronized outputs lacked the
-loss tensors needed for faithful migration and are isolated under
-\code{outputs/archive/legacy_pre_schema_v1_2026-08-07}.
+and each report stores requested filters and obtained input manifests. A future
+downstream run may bind its signature to an upstream run's schema, identity,
+pipeline/experiment configuration, and exact seeds while retaining paths and
+manifest IDs as provenance only; single-run resolution fails closed across
+pipeline variants. No pre-restart output or log remains locally, and every
+desired experiment configuration must be recomputed.
 
 Slurm workflows never submit a publisher or execute Git commands. After any
 terminal state, including failure, cancellation, or timeout, the user runs
 \code{bash publish_job.sh <job-id>} from the project root. The script verifies
 \code{main}, sources \code{$HOME/codes/proxy.sh} (or
 \code{PROXY_SCRIPT_PATH}), and fast-forward pulls \code{origin/main} before
-artifact selection or staging. It then commits only that job's exact
-stdout/stderr pair and launch-tagged run/report roots, excluding \code{*.pt},
-\code{*.npy}, and \code{*.cbm}, and pushes \code{origin/main} without opening a
-pull request. Omitting the job ID publishes all logs and lightweight outputs; a
+artifact selection or staging. With a job ID, it commits only that job's exact
+stdout/stderr pair. Omitting the job ID publishes all logs and lightweight
+outputs, excluding \code{*.pt}, \code{*.npy}, and \code{*.cbm}. It then pushes
+\code{origin/main} without opening a pull request. A
 non-fast-forward pull stops without a merge commit, and unrelated staged paths
 remain outside the publisher commit.
 
-The synthetic smoke explicitly enumerates every expected method in all seven
-families and requires seeds 1 and 2 for each. Its current run tree is below
-\code{outputs/synthetic_smoke/family/synthetic_smoke/24_6/}
-\code{numpy_linear_proxy/method/run_n/seed_n}; reports use
-\code{outputs/reports/synthetic_smoke}.
+The dependency-light synthetic smoke explicitly enumerates every expected
+method in the seven trainable/control families and requires seeds 1 and 2 for
+each. The separate foundation checks use fake or constructor-only adapters and
+never load publication checkpoints. The synthetic run tree is below
+\path{outputs/synthetic_smoke/family/synthetic_smoke/24_6/}
+\path{numpy_linear_proxy/method/run_n/seed_n}; reports use
+\path{outputs/reports/synthetic_smoke}.
 
 \subsection{Main implementation classes}
 

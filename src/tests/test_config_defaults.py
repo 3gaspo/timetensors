@@ -11,8 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from runtime import batch_size, default_sampling, model_specs
-from dataset.load import _merge_dataset_config
+from pipeline.runtime import batch_size, default_sampling, model_specs
+from data.load import _merge_dataset_config
 from training.losses import get_losses
 from training.pipeline import LearnerConfig
 

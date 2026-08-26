@@ -9,9 +9,9 @@ from typing import Any, Mapping
 
 import torch
 
-from dataset import fetch_training_data, get_sizes
-from models import load_model
-from runtime import (
+from data import fetch_training_data, get_sizes
+from model_loading import load_model
+from pipeline.runtime import (
     batch_size,
     dataset_path,
     default_sampling,
@@ -98,12 +98,12 @@ def build_loss_payload(evaluation: Mapping[str, Any]) -> dict[str, Any]:
     if sample_count and metadata.get("individual_ids") is None:
         raise ValueError("complete TimeTensors evaluation requires stable individual_ids")
     payload = {"losses": losses, "metadata": metadata, "summaries": {}}
-    payload["summaries"] = summarize_per_user(payload)
+    payload["summaries"] = summarize_losses(payload)
     return payload
 
 
-def summarize_per_user(payload: Mapping[str, Any]) -> dict[str, torch.Tensor]:
-    """Aggregate aligned elementwise losses into equal-user and W10 metrics."""
+def summarize_losses(payload: Mapping[str, Any]) -> dict[str, torch.Tensor]:
+    """Summarize aligned losses with element- and equal-user-weighted metrics."""
     ids = (payload.get("metadata") or {}).get("individual_ids")
     if ids is None:
         return {}
@@ -115,19 +115,21 @@ def summarize_per_user(payload: Mapping[str, Any]) -> dict[str, torch.Tensor]:
         values = torch.as_tensor(values).float()
         if values.shape[0] != ids.numel():
             raise ValueError(f"loss {metric!r} is not aligned with individual_ids")
+        flat_values = values.reshape(-1)
         user_means = torch.stack(
             [values[ids == individual_id].mean() for individual_id in torch.unique(ids, sorted=True)]
         )
         tail = max(1, math.ceil(0.1 * user_means.numel()))
-        summary[f"user_mean_{metric}"] = user_means.mean()
+        summary[metric] = flat_values.mean()
+        summary[f"std_{metric}"] = flat_values.std(unbiased=False)
+        summary[f"user_{metric}"] = user_means.mean()
+        summary[f"std_user_{metric}"] = user_means.std(unbiased=False)
         summary[f"w10_{metric}"] = torch.topk(user_means, tail).values.mean()
     return summary
 
 
 def merge_loss_payloads(
     payloads: list[Mapping[str, Any]],
-    *,
-    report_equal_user_metrics: bool = False,
 ) -> dict[str, Any]:
     """Concatenate aligned split payloads without materializing per-user copies."""
     if not payloads:
@@ -152,15 +154,7 @@ def merge_loss_payloads(
     if names:
         metadata["individual_names"] = names
     merged = {"losses": losses, "metadata": metadata, "summaries": {}}
-    summaries = summarize_per_user(merged)
-    if report_equal_user_metrics:
-        summaries.update(
-            {
-                metric: summaries[f"user_mean_{metric}"]
-                for metric in metric_names
-            }
-        )
-    merged["summaries"] = summaries
+    merged["summaries"] = summarize_losses(merged)
     return merged
 
 

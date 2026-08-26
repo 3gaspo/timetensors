@@ -6,10 +6,10 @@ import logging
 from pathlib import Path
 from typing import Any, Mapping
 
-from dataset import fetch_training_data, get_sizes
-from dataset.load import build_dataset_stage
-from models import load_model
-from runtime import (
+from data import fetch_training_data, get_sizes
+from data.load import build_dataset_stage
+from model_loading import load_model
+from pipeline.runtime import (
     batch_size,
     config_bool,
     dataset_path,
@@ -32,7 +32,7 @@ from runtime import (
     task_shape,
     to_plain_config,
 )
-from visu.experiment_plots import save_linear_weight_plots
+from visualization.experiment_plots import save_linear_weight_plots
 
 from .losses import get_losses
 from .pipeline import TorchLearner

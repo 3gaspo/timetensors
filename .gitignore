@@ -1,6 +1,7 @@
 .venv/
 .secrets/
 AGENTS.md
+archive/
 __pycache__/
 *.py[cod]
 *.aux

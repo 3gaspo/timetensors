@@ -16,8 +16,8 @@ import torch.nn as nn
 import torch.optim as optim
 
 from .losses import LossWrapper, build_loss, get_losses
-from models.models import load_config_dict, resolve_path
-from models.normalizations import get_normal_stats
+from model_loading.forecast import load_config_dict, resolve_path
+from proposal.normalizations import get_normal_stats
 
 
 TensorTree = torch.Tensor | dict[str, Any] | list[Any] | tuple[Any, ...] | None

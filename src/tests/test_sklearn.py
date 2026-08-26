@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from dataset.dataset import TimeSeriesData, fetch_training_data, save_data
+from data import TimeSeriesData, fetch_training_data, save_data
 from training.sklearn import train_sklearn_stage
 
 
@@ -66,7 +66,13 @@ def main() -> None:
         payload = result["all_losses"]["valid1"]
         assert payload["losses"]["mse"].numel() > 0
         assert payload["metadata"]["individual_ids"].numel() == payload["losses"]["mse"].shape[0]
-        assert "user_mean_mse" in payload["summaries"]
+        assert {
+            "mse",
+            "std_mse",
+            "user_mse",
+            "std_user_mse",
+            "w10_mse",
+        } <= set(payload["summaries"])
 
     print("test_sklearn: ok")
 

@@ -9,10 +9,10 @@ from typing import Any, Mapping
 
 import torch
 
-from dataset import fetch_training_data, get_sizes
-from models import SkLinearForecaster, iter_loader_xy
-from models.normalizations import get_normal_stats
-from runtime import (
+from data import fetch_training_data, get_sizes
+from model_loading import SkLinearForecaster, iter_loader_xy
+from proposal.normalizations import get_normal_stats
+from pipeline.runtime import (
     batch_size,
     config_bool,
     dataset_path,
@@ -32,7 +32,7 @@ from runtime import (
     task_shape,
     to_plain_config,
 )
-from visu.experiment_plots import save_linear_weight_plots
+from visualization.experiment_plots import save_linear_weight_plots
 
 from .evaluate import build_loss_payload
 from .losses import get_losses

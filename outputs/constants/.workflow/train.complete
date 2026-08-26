@@ -1,1 +1,0 @@
-v1|family=constants|mode=test|datasets=electricity|settings=504_168|models=patchtst|seeds=1|policies=keep remove_all_windows drop_all_users|mode=test|datasets=electricity|settings=504_168|models=patchtst|seeds=1|train_mode=random|batch_size=256|learning_rate=1e-5|epochs=20|valid_eval_freq=10|logging_eval_freq=10|drop_train_constant_users=true|drop_eval_constant_users=true

@@ -5,8 +5,8 @@ from tempfile import TemporaryDirectory
 
 import torch
 
-from experiment_runs import allocate_run, mark_status
-from visu.results_table import discover_results, generate_results_table
+from pipeline.runs import allocate_run, mark_status
+from results.reporting import discover_results, generate_results_table
 
 
 def _save_run(

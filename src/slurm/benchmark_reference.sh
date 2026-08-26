@@ -47,7 +47,7 @@ run_training() {
             TABLE_COLUMN_CONFIG=loss
             CASE_DISPLAY_NAME=chronos2
             run_case scripts.experiment "$dataset" "$setting" chronos2 \
-              +model.name=chronos +model.path=chronos +normalization.name=identity \
+              +model.name=chronos2 +model.path=chronos2 +normalization.name=identity \
               +model.kwargs.weights_path="$CHRONOS_WEIGHTS_PATH" \
               ++data.sampling.drop_train_constant_individuals="$REFERENCE_DROP_TRAIN_CONSTANT_USERS" \
               ++data.sampling.drop_eval_constant_individuals="$REFERENCE_DROP_EVAL_CONSTANT_USERS" \

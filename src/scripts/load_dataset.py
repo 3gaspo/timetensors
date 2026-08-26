@@ -2,7 +2,7 @@
 
 import hydra
 
-from dataset.load import main
+from data.load import main
 
 
 @hydra.main(version_base=None, config_path="../conf", config_name="config")
