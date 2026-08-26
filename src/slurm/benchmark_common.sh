@@ -3,6 +3,9 @@
 
 ROOT="${SLURM_SUBMIT_DIR:-$(pwd)}"
 cd "$ROOT"
+LOGS_ROOT="${LOGS_ROOT:-$ROOT/logs}"
+OUTPUTS_ROOT="${OUTPUTS_ROOT:-$ROOT/outputs}"
+mkdir -p "$LOGS_ROOT" "$OUTPUTS_ROOT"
 source .venv/bin/activate
 export PYTHONPATH="$ROOT/src"
 
@@ -59,8 +62,8 @@ timetensors_on_exit() {
   local status=$?
   trap - EXIT
   if [ "$status" -ne 0 ]; then
-    python -m pipeline.runs interrupt-launch --root "$ROOT/outputs" --launch-id "$EXPERIMENT_LAUNCH_ID" || true
-    elif python -m pipeline.runs complete-launch --root "$ROOT/outputs" --launch-id "$EXPERIMENT_LAUNCH_ID" >/dev/null; then
+    python -m pipeline.runs interrupt-launch --root "$OUTPUTS_ROOT" --launch-id "$EXPERIMENT_LAUNCH_ID" || true
+    elif python -m pipeline.runs complete-launch --root "$OUTPUTS_ROOT" --launch-id "$EXPERIMENT_LAUNCH_ID" >/dev/null; then
       :
     else
       status=$?

@@ -4,6 +4,22 @@ Last successful maintenance: 2026-08-11 10:45 +02:00.
 
 ## Pending
 
+- 2026-08-26: Added matching Selena fronts for all eight TimeTensors families
+  and made runtime roots explicit. `LOGS_ROOT` and `OUTPUTS_ROOT` default to
+  `logs/` and `outputs/` but remain overridable; every family output derives
+  from the selected root, and Selena selects `logs_selena/` and
+  `outputs_selena/`. Code sync protects both artifact namespaces plus
+  cluster-local dependency state, and result sync returns only the
+  Selena-named trees without deletion. Affected contracts: common and family
+  runners, 16 fronts, sync pair, ignored placeholders, workflow regression,
+  README, local/shared guidance, cluster handoff, and experiment-guideline
+  source/PDF. Git Bash syntax and all five focused workflow tests passed;
+  three LaTeX passes produced eight pages, all visually inspected without
+  clipping or overlap. The sole LaTeX diagnostic is a minor pre-existing
+  overfull line with no visible effect. No scientific rerun or artifact
+  migration is required. Deferred integration: submit one Selena test front
+  and exercise both sync directions.
+
 - 2026-08-26: Commented TiRex-2 out of the default frozen-foundation launcher
   while retaining its adapter and canonical alias, and extended every aligned
   foundation adapter's direct checkpoint discovery to the immediate parent

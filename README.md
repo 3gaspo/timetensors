@@ -109,8 +109,9 @@ The jobs under `src/slurm/` cover:
 - central versus per-user PatchTST and Chronos with W10 metrics.
 - frozen-foundation-model evaluation through the same aligned loss contract.
 
-Submit only the numbered `.slurm` files in the project root. Their names show
-the recommended order. Every front is a complete resumable workflow with
+Submit the numbered `.slurm` files in the project root on DGX or their matching
+`_selena.slurm` variants on Selena. Their names show the recommended order.
+Every pair is one complete resumable workflow with
 `EXPERIMENT_MODE=test|full|ultra` and default
 `STAGES=train,tables`. Family orchestrators and the shared stage implementations
 remain under `src/slurm/`:
@@ -163,6 +164,13 @@ EXPERIMENT_MODE=ultra sbatch 05_losses.slurm
 EXPERIMENT_MODE=test sbatch 08_foundation_models.slurm
 ```
 
+For Selena, replace the filename by its `_selena.slurm` counterpart, for
+example `EXPERIMENT_MODE=test sbatch 05_losses_selena.slurm`. Both versions
+source the same family implementation. `LOGS_ROOT` and `OUTPUTS_ROOT` default
+to `logs/` and `outputs/`; Selena sets them to `logs_selena/` and
+`outputs_selena/` and uses partition `an`, exclusive non-requeued execution,
+and WCKey `P12CU:DATASCIENCE`.
+
 Use `EXPERIMENT_MODE=full`, then `ultra` after the test profile.
 Every sweep can be narrowed without editing a launcher through
 `DATASETS_OVERRIDE`, `SETTINGS_OVERRIDE`, `SEEDS_OVERRIDE`, and
@@ -171,6 +179,8 @@ include `POLICIES_OVERRIDE`, `SAMPLING_CASES_OVERRIDE` (space-separated
 `mode:batch_size` pairs), `SAMPLING_MODES_OVERRIDE`,
 `BATCH_SIZES_OVERRIDE`, `LOSSES_OVERRIDE`, `NORMS_OVERRIDE`,
 `LINEAR_METHODS_OVERRIDE`, and `LINEAR_NORMS_OVERRIDE`.
+The shared `LOGS_ROOT` and `OUTPUTS_ROOT` select the base storage directories;
+family-level `OUT_ROOT` may override one family explicitly.
 
 The full front runs `STAGES=train,tables`. Training allocates current-manifest
 runs and executes only incomplete seeds; tables are lightweight and are rebuilt
@@ -330,11 +340,42 @@ single-seed test cell is valid but has no estimable sample deviation, so it is
 shown without `±`. See `latex/experiment_guideline.tex` for the complete
 protocol.
 
-All benchmark launchers use the `h100` partition, one CPU per task, concise
-one-word job names, and `logs/%x_%j.{out,err}` for Slurm output. Hydra logs to
+DGX benchmark launchers use the `h100` partition, one CPU per task, concise
+one-word job names, and `logs/%x_%j.{out,err}` for Slurm output. Selena uses
+partition `an` and `logs_selena/%x_%j.{out,err}`. Hydra logs to
 stdout only so the Slurm files remain the canonical run logs. Every profile
 remains sequential within one allocation; resubmit the same front to continue
 from its completion markers.
+
+## Synchronizing DGX and Selena
+
+Keep `$HOME/codes/.secrets/proxy.credentials` outside the project on both
+clusters. Its first line contains the NNI; the synchronization scripts read
+only that line and lowercase it for SSH account and home-directory paths.
+
+After updating the DGX checkout, mirror its code to Selena with:
+
+```bash
+bash sync_code_to_selena.sh
+```
+
+The transfer derives the project directory name from the checkout and makes
+Selena's code match DGX while preserving `.venv`, `.secrets`,
+`pyproject.toml`, `uv.lock`, `datasets/`, `weights/`, `outputs/`, `logs/`, and
+existing `outputs_selena/` and `logs_selena/` payloads. The Selena directory
+placeholders are mirrored, but existing contents are protected from deletion.
+Git metadata and dependency manifests are never transferred.
+
+After Selena jobs finish, copy lightweight artifacts back without deleting
+anything already present on DGX:
+
+```bash
+bash sync_results_to_dgx.sh
+```
+
+Only `outputs_selena/` and `logs_selena/` are copied in that direction, into
+the same named DGX directories. Analysis and publication remain on DGX, and
+the returned artifacts never merge into DGX `outputs/` or `logs/`.
 
 ## Publishing terminal Slurm artifacts
 

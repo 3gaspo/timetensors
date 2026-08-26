@@ -3,7 +3,7 @@
 set -euo pipefail
 FAMILY=sampling
 source "$(dirname "${BASH_SOURCE[0]}")/benchmark_common.sh"
-OUT_ROOT="$ROOT/outputs/sampling"
+OUT_ROOT="${OUT_ROOT:-$OUTPUTS_ROOT/sampling}"
 SAMPLING_CASES=()
 if [ -n "${SAMPLING_CASES_OVERRIDE:-}" ]; then
   read -ra SAMPLING_CASES <<< "$SAMPLING_CASES_OVERRIDE"

@@ -3,7 +3,7 @@
 set -euo pipefail
 FAMILY=normalizations
 source "$(dirname "${BASH_SOURCE[0]}")/benchmark_common.sh"
-OUT_ROOT="$ROOT/outputs/normalizations"
+OUT_ROOT="${OUT_ROOT:-$OUTPUTS_ROOT/normalizations}"
 read -ra NORMS <<< "${NORMS_OVERRIDE:-identity standard min-max in-min-max instance revin}"
 
 run_training() {

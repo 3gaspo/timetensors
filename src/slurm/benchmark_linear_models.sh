@@ -3,7 +3,7 @@
 set -euo pipefail
 FAMILY=linear_models
 source "$(dirname "${BASH_SOURCE[0]}")/benchmark_common.sh"
-OUT_ROOT="$ROOT/outputs/linear_models"
+OUT_ROOT="${OUT_ROOT:-$OUTPUTS_ROOT/linear_models}"
 if [ "$EXPERIMENT_MODE" = test ]; then
   DEFAULT_LINEAR_METHODS="linear sklinear"
   DEFAULT_LINEAR_NORMS="instance"

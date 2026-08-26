@@ -4,7 +4,7 @@
 set -euo pipefail
 FAMILY=constants
 source "$(dirname "${BASH_SOURCE[0]}")/benchmark_common.sh"
-OUT_ROOT="$ROOT/outputs/constants"
+OUT_ROOT="${OUT_ROOT:-$OUTPUTS_ROOT/constants}"
 if [ "$EXPERIMENT_MODE" = full ] || [ "$EXPERIMENT_MODE" = ultra ]; then
   DEFAULT_POLICIES="keep remove_train_windows remove_eval_windows remove_all_windows drop_all_users"
 else

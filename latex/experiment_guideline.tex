@@ -383,6 +383,13 @@ equal-user MSE, and worst-10\%-user MSE.
 \section{Experimental details}
 \label{sec:details}
 
+Every numbered DGX front has a matching \code{_selena.slurm} front that sources
+the same family implementation. \code{LOGS_ROOT} and \code{OUTPUTS_ROOT}
+default to \path{logs/} and \path{outputs/}; Selena overrides them to
+\path{logs_selena/} and \path{outputs_selena/}. Family \code{OUT_ROOT} values
+derive from the selected output root, so cluster placement changes storage but
+not experiment identity or scientific configuration.
+
 \subsection{Datasets and task grid}
 
 Every CSV column other than \code{date} becomes one univariate series. The
@@ -505,8 +512,8 @@ Every seed directory contains model, history, metadata, and the sole aligned
 loss artifact.
 
 \subsection{Result identities and manifests}
-Every family continues as
-\code{outputs/family/dataset/L_H/backbone/configs/run_n/seed_n}. The ordered
+Every family continues below the selected output root as
+\code{family/dataset/L_H/backbone/configs/run_n/seed_n}. The ordered
 model-config folders are: \code{policy} for constants;
 \code{sampling_mode/batch_size} for sampling; \code{normalization} for
 normalizations; \code{loss} for losses; \code{normalization/loss} for the

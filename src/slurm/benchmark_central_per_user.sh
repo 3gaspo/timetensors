@@ -3,7 +3,7 @@
 set -euo pipefail
 FAMILY=central_per_user
 source "$(dirname "${BASH_SOURCE[0]}")/benchmark_common.sh"
-OUT_ROOT="$ROOT/outputs/central_per_user"
+OUT_ROOT="${OUT_ROOT:-$OUTPUTS_ROOT/central_per_user}"
 if [ "$EXPERIMENT_MODE" = ultra ]; then
   DEFAULT_USER_MODELS="patchtst chronos2"
 else

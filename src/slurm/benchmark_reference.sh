@@ -3,7 +3,7 @@
 set -euo pipefail
 FAMILY=reference
 source "$(dirname "${BASH_SOURCE[0]}")/benchmark_common.sh"
-OUT_ROOT="$ROOT/outputs/reference"
+OUT_ROOT="${OUT_ROOT:-$OUTPUTS_ROOT/reference}"
 read -ra REFERENCE_METHODS <<< "${REFERENCE_METHODS_OVERRIDE:-persistence patchtst chronos2}"
 REFERENCE_PATCHTST_NORM="${REFERENCE_PATCHTST_NORM:-instance}"
 REFERENCE_LOSS="${REFERENCE_LOSS:-nmse}"

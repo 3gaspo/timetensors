@@ -1,9 +1,10 @@
 CLUSTER EXPERIMENT STATUS
-Updated: 2026-08-25
+Updated: 2026-08-26
 
 CURRENT HANDOFF — FULL RESTART
-- Local outputs and logs were deliberately cleared. Only outputs/.gitkeep and
-  logs/.gitkeep remain.
+- Local outputs and logs were deliberately cleared. The default outputs/ and
+  logs/ roots and Selena-specific outputs_selena/ and logs_selena/ roots each
+  contain only their placeholder.
 - There are no local run manifests, losses, models, figures, tables, reports,
   archived payloads, or Slurm logs eligible for reuse or analysis.
 - Do not restore or reuse an old remote result merely because its configuration
@@ -14,15 +15,22 @@ CURRENT HANDOFF — FULL RESTART
   and population standard deviation, equal-user mean and population standard
   deviation, and the worst-10%-user mean. Central and per-user runs therefore
   use identical metric definitions.
+- Runtime roots default to logs/ and outputs/ and are overridable. Each of the
+  eight numbered DGX fronts has a scientific-equivalent Selena front selecting
+  logs_selena/ and outputs_selena/.
 
 NEXT JOBS
 1. Run EXPERIMENT_MODE=test sbatch 01_constants.slurm.
-2. After the test succeeds and its artifacts are synchronized and analyzed,
+2. Run the equivalent 01_constants_selena.slurm test and validate isolated
+   Selena artifacts plus both synchronization directions.
+3. After the tests succeed and their artifacts are synchronized and analyzed,
    restart the publication families in documented order with 01_constants.slurm
    through 07_central_per_user.slurm.
-3. Place the five official foundation-model checkpoints, run
+4. Place the five official foundation-model checkpoints, run
    EXPERIMENT_MODE=test sbatch 08_foundation_models.slurm, then run its desired
    full/ultra profile after artifact inspection.
+
+No Selena front or transfer has yet been exercised on the clusters.
 
 HISTORICAL CONTEXT
 - Earlier pre-schema and schema-1 runs, including job 42527, are historical

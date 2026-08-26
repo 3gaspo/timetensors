@@ -10,8 +10,12 @@ __pycache__/
 *.toc
 outputs/*
 !outputs/.gitkeep
+outputs_selena/*
+!outputs_selena/.gitkeep
 logs/*
 !logs/.gitkeep
+logs_selena/*
+!logs_selena/.gitkeep
 datasets/*
 !datasets/.gitkeep
 weights/*

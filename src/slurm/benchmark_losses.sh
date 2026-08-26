@@ -3,7 +3,7 @@
 set -euo pipefail
 FAMILY=losses
 source "$(dirname "${BASH_SOURCE[0]}")/benchmark_common.sh"
-OUT_ROOT="$ROOT/outputs/losses"
+OUT_ROOT="${OUT_ROOT:-$OUTPUTS_ROOT/losses}"
 read -ra LOSSES <<< "${LOSSES_OVERRIDE:-mse mae nmse nmae relative_mse}"
 
 run_training() {

@@ -3,7 +3,7 @@
 set -euo pipefail
 FAMILY=foundation_models
 source "$(dirname "${BASH_SOURCE[0]}")/benchmark_common.sh"
-OUT_ROOT="$ROOT/outputs/foundation_models"
+OUT_ROOT="${OUT_ROOT:-$OUTPUTS_ROOT/foundation_models}"
 read -ra FOUNDATION_MODELS <<< "${FOUNDATION_MODELS_OVERRIDE:-chronos2 chronos_bolt ts_icl tabpfn_ts}"
 # tirex2 remains adapter-supported but is excluded from foundation launches for now.
 DROP_FOUNDATION_CONSTANT_USERS="${DROP_FOUNDATION_CONSTANT_USERS:-false}"
