@@ -1,5 +1,5 @@
 CLUSTER EXPERIMENT STATUS
-Updated: 2026-08-26
+Updated: 2026-08-28
 
 CURRENT HANDOFF — FULL RESTART
 - Local outputs and logs were deliberately cleared. The default outputs/ and
@@ -20,6 +20,9 @@ CURRENT HANDOFF — FULL RESTART
   logs_selena/ and outputs_selena/.
 
 NEXT JOBS
+No TimeTensors job is currently running or queued; the user reconfirmed the
+empty scheduler state on 2026-08-28.
+
 1. Run EXPERIMENT_MODE=test sbatch 01_constants.slurm.
 2. Run the equivalent 01_constants_selena.slurm test and validate isolated
    Selena artifacts plus both synchronization directions.
@@ -30,7 +33,8 @@ NEXT JOBS
    EXPERIMENT_MODE=test sbatch 08_foundation_models.slurm, then run its desired
    full/ultra profile after artifact inspection.
 
-No Selena front or transfer has yet been exercised on the clusters.
+No Selena experiment job or result transfer is recorded. Code-deployment
+state was not independently inspected in this handoff.
 Result synchronization must run on DGX as an inbound Selena pull. An unscoped
 publisher run includes the paired Selena artifact trees under the standard
 lightweight exclusions.
