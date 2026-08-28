@@ -9,27 +9,18 @@ from typing import Any, Mapping
 
 import torch
 
-from data import fetch_training_data, get_sizes
+from data import get_sizes
+from data.load import build_dataset_stage
 from model_loading import load_model
 from pipeline.runtime import (
-    batch_size,
-    dataset_path,
-    default_sampling,
-    default_splits,
-    default_subsets,
     device,
     model_specs,
-    normalization_needs_stats,
     pretrained_path,
     run_dir,
     save_torch,
     section,
     seed,
     setup_logging,
-    stats_eps,
-    stats_max_windows,
-    stats_seed,
-    task_shape,
     to_plain_config,
 )
 
@@ -41,24 +32,8 @@ LOGGER = logging.getLogger(__name__)
 
 
 def _fetch_loaders(config: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-    lags, horizon = task_shape(config)
-    data_cfg = section(config, "data")
-    return fetch_training_data(
-        dataset_path(config),
-        default_splits(config),
-        default_sampling(config),
-        default_subsets(config),
-        batch_size(config),
-        lags,
-        horizon,
-        seed=seed(config),
-        stats_save_path=None,
-        compute_stats=normalization_needs_stats(config),
-        stats_max_windows=stats_max_windows(config),
-        stats_seed=stats_seed(config),
-        stats_eps=stats_eps(config),
-        legacy_context_kind=data_cfg.get("legacy_context_kind"),
-    )
+    built = build_dataset_stage(config)
+    return built["loaders"], built.get("stats", {})
 
 
 def _load_eval_model(

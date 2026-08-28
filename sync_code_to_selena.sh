@@ -2,6 +2,20 @@
 
 set -euo pipefail
 
+usage() {
+    printf 'usage: bash sync_code_to_selena.sh [--dry-run]\n' >&2
+}
+
+RSYNC_OPTIONS=()
+DRY_RUN=false
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --dry-run) RSYNC_OPTIONS+=(--dry-run); DRY_RUN=true; shift ;;
+        -h|--help) usage; exit 0 ;;
+        *) usage; printf 'unknown argument: %s\n' "$1" >&2; exit 2 ;;
+    esac
+done
+
 PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_NAME="$(basename "$PROJECT_ROOT")"
 SECRET_FILE="$HOME/codes/.secrets/proxy.credentials"
@@ -27,7 +41,8 @@ if [ ! -f "$SOURCE_ROOT/README.md" ] || [ ! -f "$SOURCE_ROOT/sync_code_to_selena
 fi
 
 echo "Synchronizing $PROJECT_NAME code from DGX to Selena..."
-rsync -rlptz --delete --partial --info=progress2 \
+rsync -rlptz --delete-delay --itemize-changes --partial --info=progress2 \
+    "${RSYNC_OPTIONS[@]}" \
     --exclude='.git/' \
     --exclude='.venv/' \
     --exclude='.secrets/' \
@@ -45,6 +60,11 @@ rsync -rlptz --delete --partial --info=progress2 \
     --exclude='logs_selena/***' \
     "$SOURCE_ROOT" \
     "$DESTINATION"
+
+if [ "$DRY_RUN" = true ]; then
+    echo "PREVIEW: no files were transferred or deleted."
+    exit 0
+fi
 
 echo "SUCCESS: Selena's $PROJECT_NAME code matches DGX."
 echo "Preserved on Selena: .venv, .secrets, pyproject.toml, uv.lock, datasets, weights, outputs, logs, outputs_selena, and logs_selena."

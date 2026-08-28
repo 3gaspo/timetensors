@@ -27,6 +27,7 @@ def fetch_csv(
     data_path: str | Path,
     data_name: str,
     global_context_cols: Optional[Sequence[str]] = None,
+    target_cols: Optional[Sequence[str]] = None,
     drop_users: Optional[str | Sequence[int]] = None,
     rename_cols: Optional[Mapping[str, str]] = None,
     aggr: Optional[str] = None,
@@ -95,6 +96,13 @@ def fetch_csv(
         )
         for source_id, column in zip(source_ids, source_columns)
     }
+    if target_cols is not None:
+        requested_targets = [str(column) for column in target_cols]
+        missing = [column for column in requested_targets if column not in source_columns]
+        if missing:
+            raise KeyError(f"target columns not found: {missing}")
+        source_ids = [source_columns.index(column) for column in requested_targets]
+        values_df = values_df.iloc[:, source_ids]
     requested_drop = drop if drop is not None else drop_users
     if requested_drop is not None:
         items = (
@@ -116,7 +124,8 @@ def fetch_csv(
             else:
                 raise KeyError(f"series {item!r} not found")
         keep_ids = [source_id for source_id in source_ids if source_id not in drop_ids]
-        values_df = values_df.iloc[:, keep_ids]
+        keep_positions = [source_ids.index(source_id) for source_id in keep_ids]
+        values_df = values_df.iloc[:, keep_positions]
         source_ids = keep_ids
 
     values_df.columns = [f"serie_{source_id}" for source_id in source_ids]
@@ -209,6 +218,7 @@ def build_dataset(
     data_path: str | Path,
     data_name: str,
     global_context_cols: Optional[Sequence[str]] = None,
+    target_cols: Optional[Sequence[str]] = None,
     drop_users: Optional[str | Sequence[int]] = None,
     build_individual_ids_context: bool = False,
     rename_cols: Optional[Mapping[str, str]] = None,
@@ -224,16 +234,17 @@ def build_dataset(
     values_df, global_df, datetimes, metadata = fetch_csv(
         data_path,
         data_name,
-        global_context_cols,
-        drop_users,
-        rename_cols,
-        aggr,
-        aggr_period,
-        users_dim,
-        date_col,
-        dates,
-        drop,
-        True,
+        global_context_cols=global_context_cols,
+        target_cols=target_cols,
+        drop_users=drop_users,
+        rename_cols=rename_cols,
+        aggr=aggr,
+        aggr_period=aggr_period,
+        users_dim=users_dim,
+        date_col=date_col,
+        dates=dates,
+        drop=drop,
+        return_metadata=True,
     )
     values = torch.tensor(values_df.values, dtype=torch.float32).T.unsqueeze(1)
     individual_context = None

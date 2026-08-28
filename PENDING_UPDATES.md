@@ -1,8 +1,97 @@
 # Pending updates
 
+- 2026-08-28: Reconciled the five-view documentation contract by reducing the
+  public README to a 109-line goal/setup/execution quickstart and leaving the
+  formal benchmark, architecture, eight numbered families, protocol, and
+  restart evidence in their designated views. The validator now enforces
+  README ownership, owner links, complete DGX-front coverage, and absence of
+  stale LaTeX artifacts. Removed four retained guideline build auxiliaries.
+  The shared six-project documentation check passed; the current eight-page
+  guideline was rebuilt and visually inspected, and the two-page method note
+  remains current. No scientific rerun or executive-summary change is
+  required. Deferred integration: preview code sync on DGX, inspect every
+  `*deleting` line, then perform the real sync.
+
+- 2026-08-28: Made result transfer tiered: sync now defaults to aggregate
+  lightweight analysis artifacts, `detailed` adds row-level/per-run
+  diagnostics, and `full` explicitly retrieves binary recovery payloads;
+  publication defaults to the same lightweight scope and offers non-binary
+  `detailed` output. Affected contracts: both result-transfer scripts, README,
+  and focused transfer checks. Git Bash syntax passed for both scripts, the
+  two transfer-tier checks passed, all nine active publisher copies were
+  byte-identical, and the existing Slurm/publisher checks passed. No
+  scientific rerun or LaTeX update is required. Deferred integration: exercise
+  each sync tier against Selena and inspect one detailed publication on DGX.
+
+- 2026-08-27: Replaced the frozen-foundation family with `chronos2`,
+  `chronos_bolt`, `chronos_t5`, and `ts_icl`; removed TiREx-2 and TabPFN from
+  dependencies, locks, registries, and launcher routing; retained the
+  unregistered TabPFN adapter and archived the TiREx-2 source. Affected
+  contracts: dependency metadata, shared adapters, model registry/exports,
+  family 8, focused tests, README, and experiment guideline. Model and Slurm
+  checks passed directly, Python compilation and Bash syntax passed, and the
+  rebuilt eight-page guideline passed full visual inspection. Deferred:
+  synchronize the prepared cluster environment and rerun family 8; other
+  benchmark families do not require reruns solely for this model-axis change.
+
 Last successful maintenance: 2026-08-11 10:45 +02:00.
 
 ## Pending
+
+- 2026-08-27: Made prepared-cache reuse require every manifest-declared `.pt`
+  file to remain present, nonempty, byte-size consistent, loadable, and equal
+  to its recorded shape; a missing date tensor or malformed context tensor now
+  rebuilds the exact signed variant. The focused cache regression passed both
+  recovery cases and Python compilation passed. The publisher also gained the
+  stable first-UTC stale-on-Git header; all five publisher checks, nine-copy Git
+  Bash syntax, and byte parity passed. README contracts changed; no LaTeX
+  update or scientific rerun is required. Deferred integration: exercise
+  concurrent first preparation/source refresh and one real oversized publish.
+
+Maintenance 2026-08-27: direct preparation/cache, configuration, workflow,
+README, guideline, handoff, repository-status, and placeholder inspection
+confirmed signed project-local variants and no active result payload. The
+complementary dataloader integration script passed. The eight-page guideline
+was rebuilt; one monospaced-path overflow was corrected, the final compile log
+was clean, and every rendered page passed visual inspection. Publisher Bash
+syntax, byte parity, and the representative regression passed. Concurrent
+first preparation/source refresh is not yet cluster-validated and the current
+implementation has no inter-process preparation lock; keep this boundary
+blocked pending that exercise or a lock. The complete restart, managed-lock
+refresh, lifecycle observation, and real oversized publication also remain.
+
+- 2026-08-27: Hardened the thesis-standard publisher against GitHub's
+  100 MB file limit. Before staging, each selected non-excluded file above
+  100,000,000 bytes is excluded literally and represented by
+  `<original>.sample.txt`; text samples contain source metadata and the first
+  10% capped at 10,000,000 bytes, while binary samples retain metadata only.
+  Affected contracts: publisher, README, shared publication guidance, and the
+  five maintained publisher regressions where present. Git Bash syntax passed
+  for all nine active copies, all five focused publisher checks passed, and
+  both publisher and test copies are byte-identical. No scientific rerun,
+  artifact migration, or LaTeX change is required. Deferred integration:
+  exercise one real oversized log publication on DGX.
+
+- 2026-08-26: Added QoS `an_preemptable` to all eight Selena fronts and aligned
+  the shared scheduler contract, README, and focused workflow regression. All
+  five direct workflow tests passed. No scientific configuration, artifact
+  contract, result, or rerun requirement changed. Deferred integration: mirror
+  the updated DGX tree to Selena before the next overflow submission.
+
+- 2026-08-26: Standardized the validated Selena transfer/publication flow.
+  `sync_results_to_dgx.sh` now runs on DGX and pulls the isolated Selena trees;
+  unscoped publication includes paired `logs_selena/` and lightweight
+  `outputs_selena/` under the existing heavy-payload exclusions, while numeric
+  job-ID mode remains standard-log-only. Affected contracts: result helper,
+  publisher, focused workflow/publisher regressions, README, shared guidance,
+  and cluster handoff. Bash syntax passed for all 15 maintained scripts, all
+  five publisher checks and all five TimeTensors workflow checks passed, and
+  the nine publisher copies plus five suffix-result helpers are each
+  byte-identical. The README changed; the guideline's
+  all-log/lightweight-output wording remains accurate, so LaTeX/PDF files are
+  unchanged. No scientific rerun or migration is required. Deferred
+  integration: exercise one real pull and unscoped publication after a Selena
+  test job.
 
 - 2026-08-26: Added matching Selena fronts for all eight TimeTensors families
   and made runtime roots explicit. `LOGS_ROOT` and `OUTPUTS_ROOT` default to
@@ -286,3 +375,37 @@ visual inspection. The assertion-only and empty archive-storage entries are
 resolved. The complete restart, managed lock refresh, checkpoint-backed
 foundation workflow, lifecycle observations, and publisher check remain
 pending.
+
+## 2026-08-27 — Signed project-local prepared dataset variants
+
+- Behavior and affected contracts: TimeTensors now reads raw wide CSVs, applies
+  replacement `drop_users` once, and saves exact tensor variants under
+  project-local `datasets/prepared/<dataset>/<signature>/` with a completed
+  version-1 dataset manifest. Target selection is part of preparation;
+  complete exact variants are reused without dropping users again. Selena
+  fronts no longer disable scheduler requeue.
+- Focused checks completed: config precedence, prepared-cache build/reuse and
+  variant separation, and all five Slurm workflow tests passed; changed Python
+  compiled, active experiment Bash/Slurm syntax passed, and `git diff --check`
+  passed.
+- Deferred integration: exercise concurrent first preparation and source-file
+  refresh on the cluster, refresh the managed lock separately, and observe a
+  real requeue lifecycle.
+- README/LaTeX and reruns: README, guidance, and guideline source specify the
+  cache/manifest and replacement contracts; re-render during maintenance. The
+  already-required complete restart must create project-local variants rather
+  than reuse tensors beside shared CSVs; the executive summary is unchanged.
+
+## 2026-08-28 — Report-only default artifact transfer
+
+- Behavior and affected contracts: lightweight result sync and publication now
+  select logs plus only `outputs*/reports/`, so transfer cost no longer scales
+  with TimeTensors run-level datasets, settings, models, or diagnostics.
+  Detailed/full tiers retain explicit deeper transfer.
+- Focused check completed: the shared transfer-tier contract check passed in
+  all six active experiment repositories (13 tests total).
+- Deferred integration: exercise one real DGX pull and manual publisher run;
+  no synchronization, commit, or push was performed locally.
+- README/LaTeX and reruns: README and guideline source document the compact
+  default; re-render the guideline during maintenance. No additional
+  scientific rerun is caused by the transfer change.

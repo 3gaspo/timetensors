@@ -64,12 +64,13 @@ def main() -> None:
             ),
             encoding="utf-8",
         )
-        merged = _merge_dataset_config(
+        merged, provenance = _merge_dataset_config(
             {"raw_path": str(root / "dataset.csv"), "drop_users": [3], "date_col": "run_date"}
         )
-        assert merged["drop_users"] == [1, 2, 3]
+        assert merged["drop_users"] == [3]
         assert merged["date_col"] == "run_date"
         assert merged["config_path"] == str(root / "config.json")
+        assert provenance["effective_drop_users"] == [3]
 
     print("test_config_defaults: ok")
 

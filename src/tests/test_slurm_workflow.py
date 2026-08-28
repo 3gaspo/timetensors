@@ -28,13 +28,20 @@ class SlurmWorkflowTest(unittest.TestCase):
             self.assertIn(f"--exclude='{excluded}'", code)
         self.assertIn("selena.hpc.edf.fr", code)
         self.assertIn("--delete", code)
-        self.assertIn("dgx-front.retd.edf.fr", results)
+        self.assertNotIn("dgx-front.retd.edf.fr", results)
+        self.assertIn(
+            'SOURCE_ROOT="$nni@selena.hpc.edf.fr:~/codes/$PROJECT_NAME"',
+            results,
+        )
+        self.assertIn('DESTINATION_ROOT="$PROJECT_ROOT"', results)
+        self.assertIn('mkdir -p "$DESTINATION_ROOT/outputs_selena"', results)
         self.assertIn("--include='outputs_selena/.gitkeep'", code)
         self.assertIn("--exclude='outputs_selena/***'", code)
         self.assertIn("--include='logs_selena/.gitkeep'", code)
         self.assertIn("--exclude='logs_selena/***'", code)
         self.assertIn('"$SOURCE_ROOT/outputs_selena/"', results)
         self.assertIn('"$SOURCE_ROOT/logs_selena/"', results)
+        self.assertIn("pulled from Selena to DGX", results)
         self.assertNotIn("--delete", results)
 
     def test_fronts_use_standard_scale_and_stage_controls(self):
@@ -71,9 +78,10 @@ class SlurmWorkflowTest(unittest.TestCase):
             )
             self.assertIn(expected_stages, text)
             self.assertIn("#SBATCH --partition=an", text)
+            self.assertIn("#SBATCH --qos=an_preemptable", text)
             self.assertIn("#SBATCH --output=logs_selena/%x_%j.out", text)
             self.assertIn("#SBATCH --exclusive", text)
-            self.assertIn("#SBATCH --no-requeue", text)
+            self.assertNotIn("#SBATCH --no-requeue", text)
             self.assertIn("#SBATCH --wckey=P12CU:DATASCIENCE", text)
             self.assertIn('OUTPUTS_ROOT="$PROJECT_ROOT/outputs_selena"', text)
             self.assertIn('LOGS_ROOT="$PROJECT_ROOT/logs_selena"', text)
@@ -115,8 +123,9 @@ class SlurmWorkflowTest(unittest.TestCase):
         self.assertIn('srun --ntasks=1 python -m "$module"', common)
         self.assertIn("srun --ntasks=1 python -m scripts.report", common)
         self.assertNotIn("--status completed", common)
-        self.assertIn("dataset_has_tensor_payload", common)
-        self.assertIn("missing_tensor_payload", common)
+        self.assertNotIn("dataset_has_tensor_payload", common)
+        self.assertIn('PREPARED_DATA_ROOT="${PREPARED_DATA_ROOT:-$ROOT/datasets/prepared}"', common)
+        self.assertIn('+data.prepared_root="$PREPARED_DATA_ROOT"', common)
         self.assertIn('"$ROOT/../datasets"', common)
         self.assertIn('"$ROOT/../weights"', common)
         self.assertIn('"$SHARED_ROOT/datasets"', common)
@@ -160,18 +169,20 @@ class SlurmWorkflowTest(unittest.TestCase):
             ROOT / "src/slurm/benchmark_foundation_models.sh"
         ).read_text(encoding="utf-8")
         self.assertIn(
-            "chronos2 chronos_bolt ts_icl tabpfn_ts",
+            "chronos2 chronos_bolt chronos_t5 ts_icl",
             foundation,
         )
-        self.assertIn("# tirex2 remains adapter-supported", foundation)
         self.assertIn("+experiment.skip_training=true", foundation)
         self.assertIn('stage_evaluate.sh', foundation)
         self.assertTrue((ROOT / "08_foundation_models.slurm").is_file())
-        for adapter in ("chronos2.py", "chronos_bolt.py", "ts_icl.py", "tirex2.py", "tabpfn.py"):
+        for adapter in ("chronos2.py", "chronos_bolt.py", "chronos_t5.py", "ts_icl.py"):
             source = (ROOT / "src/external_models" / adapter).read_text(
                 encoding="utf-8"
             )
             self.assertIn('project.parent / "weights"', source)
+        self.assertTrue((ROOT / "src/external_models/tabpfn.py").is_file())
+        self.assertFalse((ROOT / "src/external_models/tirex2.py").exists())
+        self.assertTrue((ROOT / "archive/retired_external_models/tirex2.py").is_file())
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""Thin tensor adapter around the official TiRex-2 package."""
+"""Archived tensor adapter around the retired TiREx-2 package."""
 
 from __future__ import annotations
 

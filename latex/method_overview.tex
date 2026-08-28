@@ -1,0 +1,61 @@
+\documentclass[10pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,booktabs,array,microtype}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,linkcolor=blue,urlcolor=blue]{hyperref}
+\definecolor{navy}{HTML}{17365D}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\title{\color{navy}TimeTensors Forecasting Benchmark\\[3pt]\large Unified task and controlled experiment design}
+\author{Thesis project}
+\date{Standalone method note}
+\begin{document}
+\maketitle
+\begin{abstract}
+This note isolates the scientific formulation from implementation and cluster
+operations. It is intended to be readable on its own and reusable when drafting
+a paper introduction or method section.
+\end{abstract}
+
+\section{Forecasting population}
+Let $x_u(1{:}T)$ denote user $u$ in a multivariate population
+$\mathcal U$. A sample anchored at $t$ is
+\[
+ X_{u,t}=x_u(t-L+1{:}t),\qquad
+ Y_{u,t}=x_u(t+1{:}t+H).
+\]
+Chronological splits own target dates; context may cross the preceding split
+boundary. One run seed controls population partitioning, sampling,
+initialization, and optimization.
+
+\section{Unified forecaster}
+A configured forecaster is the composition
+\[
+ \widehat Y=g_{\rm out}\!\left(
+ f_\theta(g_{\rm in}(X),C_{\rm past},C_{\rm future})\right),
+\]
+where $g_{\rm in}$ and $g_{\rm out}$ define normalization, $f_\theta$ is a
+trainable or frozen backbone, and covariates are present only for capable
+models. Unsupported non-empty covariates raise rather than disappearing.
+
+\section{Controlled factors}
+The benchmark varies one declared family at a time: constant-window policy,
+sampling and batch size, normalization, reference model, training loss, linear
+architecture, centralized versus per-user fitting, and frozen foundation
+model. Other training controls remain common within a comparison.
+
+\section{Population-aware evaluation}
+For a pointwise loss $\ell$, the global estimator averages all evaluated
+user-window contributions. Equal-user reporting first computes
+$\bar\ell_u$ per user and then averages over users. The worst-user statistic
+averages the largest $\lceil0.1|\mathcal U|\rceil$ values of $\bar\ell_u$.
+Seed dispersion includes every stochastic choice governed by the run seed.
+
+\section{Reproducibility boundary}
+Each prepared dataset variant is identified by its tensor-building
+configuration. Each experiment is selected through a schema-1 manifest
+containing scientific identity, pipeline parameters, and seeds. Reports accept
+only completed manifests and record their exact inputs.
+\end{document}

@@ -5,7 +5,8 @@ ROOT="${SLURM_SUBMIT_DIR:-$(pwd)}"
 cd "$ROOT"
 LOGS_ROOT="${LOGS_ROOT:-$ROOT/logs}"
 OUTPUTS_ROOT="${OUTPUTS_ROOT:-$ROOT/outputs}"
-mkdir -p "$LOGS_ROOT" "$OUTPUTS_ROOT"
+PREPARED_DATA_ROOT="${PREPARED_DATA_ROOT:-$ROOT/datasets/prepared}"
+mkdir -p "$LOGS_ROOT" "$OUTPUTS_ROOT" "$PREPARED_DATA_ROOT"
 source .venv/bin/activate
 export PYTHONPATH="$ROOT/src"
 
@@ -114,7 +115,6 @@ for setting in "${SETTINGS[@]}"; do
 done
 SETTINGS_CSV="$(IFS=,; echo "${SETTING_NAMES[*]}")"
 read -ra STAGE_LIST <<< "${STAGES_SPEC//,/ }"
-declare -A DATASET_BUILT
 
 stage_requested() {
   local wanted="$1" stage
@@ -160,13 +160,6 @@ resolve_weight_path() {
     fi
   done
   echo "$WEIGHTS_ROOT/$relative_path"
-}
-
-dataset_has_tensor_payload() {
-  local dataset_directory="$1" values_file
-  [ -d "$dataset_directory" ] || return 1
-  values_file="$(find "$dataset_directory" -maxdepth 1 -type f -name '*values.pt' -print -quit 2>/dev/null || true)"
-  [ -n "$values_file" ]
 }
 
 run_case() {
@@ -223,30 +216,20 @@ run_case() {
     log_error "allocated non-skipped run has no pending seeds: $run_dir"
     exit 1
   fi
-  local rebuild=false rebuild_reason=not_needed
-  if [ -z "${DATASET_BUILT[$dataset]:-}" ]; then
-    if [ "$REBUILD_DATASETS" = true ]; then
-      rebuild=true
-      rebuild_reason=forced
-    elif ! dataset_has_tensor_payload "$case_data_root/$dataset"; then
-      rebuild=true
-      rebuild_reason=missing_tensor_payload
-    fi
-    if [ "$rebuild" = true ]; then
-      DATASET_BUILT[$dataset]=1
-    fi
-  fi
   local config_args=()
   if [ -f "$case_data_root/$dataset/config.json" ]; then
     config_args+=(+data.config_path="$case_data_root/$dataset/config.json")
   fi
+  if [ "${DROP_USERS_OVERRIDE+x}" = x ]; then
+    config_args+=(+data.drop_users="$DROP_USERS_OVERRIDE")
+  fi
   for seed in "${pending_seeds[@]}"; do
     python -m pipeline.runs status --run-dir "$run_dir" --status running --seed "$seed"
   done
-  log_section "configuration dataset=$dataset lags=$lags horizon=$horizon backbone=$backbone model_configs=${MODEL_CONFIG_VALUES[*]:-none} module=$module requested_seeds=$SEEDS_CSV run_seeds=$run_seeds_csv run=$run_dir computation_signature=$run_signature data_root=$case_data_root train_sampling=$TRAIN_MODE train_stride=1 eval_sampling=all eval_stride=$horizon batch_size=$effective_batch learning_rate=$LR epochs=$EPOCHS rebuild_dataset=$rebuild rebuild_reason=$rebuild_reason overrides=$*"
+  log_section "configuration dataset=$dataset lags=$lags horizon=$horizon backbone=$backbone model_configs=${MODEL_CONFIG_VALUES[*]:-none} module=$module requested_seeds=$SEEDS_CSV run_seeds=$run_seeds_csv run=$run_dir computation_signature=$run_signature data_root=$case_data_root prepared_data_root=$PREPARED_DATA_ROOT train_sampling=$TRAIN_MODE train_stride=1 eval_sampling=all eval_stride=$horizon batch_size=$effective_batch learning_rate=$LR epochs=$EPOCHS force_prepare_dataset=$REBUILD_DATASETS overrides=$*"
   srun --ntasks=1 python -m "$module" \
     +data.raw_path="$case_data_root/$dataset" \
-    +data.path="$case_data_root/$dataset" \
+    +data.prepared_root="$PREPARED_DATA_ROOT" \
     +data.name="$dataset" \
     "${config_args[@]}" \
     +task.lags="$lags" \
@@ -265,7 +248,7 @@ run_case() {
     +training.logging_eval_freq="$LOGGING_EVAL_FREQ" \
     +training.plot_step_train_loss=false \
     +training.device=gpu \
-    +experiment.rebuild_dataset="$rebuild" \
+    +experiment.rebuild_dataset="$REBUILD_DATASETS" \
     +experiment.recompute_stats=true \
     +experiment.seeds="[$run_seeds_csv]" \
     +output.dir="$run_dir" \

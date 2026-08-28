@@ -11,7 +11,6 @@ from pipeline.runtime import (
     config_bool,
     device,
     pretrained_path,
-    rebuild_dataset,
     recompute_stats,
     run_dir,
     seed,
@@ -62,25 +61,23 @@ def run_experiment(config: Mapping[str, Any]) -> dict[str, Any]:
     model_name = model_config.get("name", model_config.get("path", "linear"))
     LOGGER.info("%s", "=" * 72)
     LOGGER.info(
-        "experiment model=%s out=%s rebuild_dataset=%s evaluate=%s",
+        "experiment model=%s out=%s force_prepare_dataset=%s evaluate=%s",
         model_name,
         out_dir,
-        rebuild_dataset(config),
+        bool(experiment.get("rebuild_dataset", False)),
         bool(experiment.get("evaluate", True)),
     )
     LOGGER.info("stats recompute=%s", recompute_stats(config))
     logged_device = False
 
-    if rebuild_dataset(config):
-        LOGGER.info("dataset start")
-        dataset_result = build_dataset_stage(config)
-        loaders = dataset_result.get("loaders")
-        stats = dataset_result.get("stats")
-        results["dataset_path"] = str(dataset_result["dataset_path"])
-        results["shape"] = dataset_result.get("shape")
-        LOGGER.info("dataset done")
-    else:
-        LOGGER.info("dataset rebuild skipped")
+    LOGGER.info("dataset start")
+    dataset_result = build_dataset_stage(config)
+    loaders = dataset_result.get("loaders")
+    stats = dataset_result.get("stats")
+    results["dataset_path"] = str(dataset_result["dataset_path"])
+    results["dataset_manifest_path"] = str(dataset_result["dataset_manifest_path"])
+    results["shape"] = dataset_result.get("shape")
+    LOGGER.info("dataset done")
 
     has_pretrained = pretrained_path(config) is not None
     skip_training = bool(experiment.get("skip_training", False)) or (

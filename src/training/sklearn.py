@@ -9,27 +9,18 @@ from typing import Any, Mapping
 
 import torch
 
-from data import fetch_training_data, get_sizes
+from data import get_sizes
+from data.load import build_dataset_stage
 from model_loading import SkLinearForecaster, iter_loader_xy
 from proposal.normalizations import get_normal_stats
 from pipeline.runtime import (
-    batch_size,
     config_bool,
-    dataset_path,
-    default_sampling,
-    default_splits,
-    default_subsets,
-    recompute_stats,
     run_dir,
     save_torch,
     section,
     seed,
     seeded_configs,
     setup_logging,
-    stats_eps,
-    stats_max_windows,
-    stats_seed,
-    task_shape,
     to_plain_config,
 )
 from visualization.experiment_plots import save_linear_weight_plots
@@ -42,24 +33,8 @@ LOGGER = logging.getLogger(__name__)
 
 
 def _fetch_loaders(config: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-    lags, horizon = task_shape(config)
-    data_cfg = section(config, "data")
-    return fetch_training_data(
-        dataset_path(config),
-        default_splits(config),
-        default_sampling(config),
-        default_subsets(config),
-        batch_size(config),
-        lags,
-        horizon,
-        seed=seed(config),
-        stats_save_path=run_dir(config) / "dataset_artifacts",
-        compute_stats=recompute_stats(config),
-        stats_max_windows=stats_max_windows(config),
-        stats_seed=stats_seed(config),
-        stats_eps=stats_eps(config),
-        legacy_context_kind=data_cfg.get("legacy_context_kind"),
-    )
+    built = build_dataset_stage(config)
+    return built["loaders"], built.get("stats", {})
 
 
 def _normalization_config(config: Mapping[str, Any]) -> dict[str, Any] | None:

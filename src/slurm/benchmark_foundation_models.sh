@@ -4,8 +4,7 @@ set -euo pipefail
 FAMILY=foundation_models
 source "$(dirname "${BASH_SOURCE[0]}")/benchmark_common.sh"
 OUT_ROOT="${OUT_ROOT:-$OUTPUTS_ROOT/foundation_models}"
-read -ra FOUNDATION_MODELS <<< "${FOUNDATION_MODELS_OVERRIDE:-chronos2 chronos_bolt ts_icl tabpfn_ts}"
-# tirex2 remains adapter-supported but is excluded from foundation launches for now.
+read -ra FOUNDATION_MODELS <<< "${FOUNDATION_MODELS_OVERRIDE:-chronos2 chronos_bolt chronos_t5 ts_icl}"
 DROP_FOUNDATION_CONSTANT_USERS="${DROP_FOUNDATION_CONSTANT_USERS:-false}"
 
 run_evaluation() {
@@ -22,17 +21,13 @@ run_evaluation() {
             weight_path="$(resolve_weight_path chronos-bolt-base)"
             batch=128
             ;;
+          chronos_t5)
+            weight_path="$(resolve_weight_path chronos-t5-base)"
+            batch=32
+            ;;
           ts_icl)
             weight_path="$(resolve_weight_path tsicl/tsicl-v1.ckpt)"
             batch=32
-            ;;
-          tirex2)
-            weight_path="$(resolve_weight_path tirex2)"
-            batch=64
-            ;;
-          tabpfn_ts)
-            weight_path="$(resolve_weight_path tabpfnts/tabpfn-v2.5-regressor-v2.5_default.ckpt)"
-            batch=1
             ;;
           *)
             log_error "unknown foundation model=$model"

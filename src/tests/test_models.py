@@ -123,19 +123,21 @@ def main() -> None:
     assert shared_foundation == (
         "chronos2",
         "chronos_bolt",
+        "chronos_t5",
         "ts_icl",
-        "tirex2",
-        "tabpfn_ts",
     )
     for removed in (
         "chronos",
         "chronos-2",
         "chronos-bolt",
+        "chronos-t5",
         "tsicl",
         "ts-icl",
+        "tirex2",
         "tirex_2",
         "tirex-2",
         "tyrex2",
+        "tabpfn_ts",
         "tabpfn",
         "tabpfn-ts",
     ):
@@ -158,6 +160,19 @@ def main() -> None:
         assert "canonical alias" in str(error)
     else:
         raise AssertionError("foundation import paths must not bypass canonical aliases")
+
+    try:
+        load_model(
+            ModelConfig(
+                name="retired_tabpfn",
+                path="external_models.tabpfn.TabPFNTS",
+                kwargs={"lags": 8, "dim": 1, "horizon": 3},
+            )
+        )
+    except ValueError as error:
+        assert "retired foundation adapter" in str(error)
+    else:
+        raise AssertionError("retired TabPFN source must not be runnable")
 
     try:
         load_model(_config("DLinear"))

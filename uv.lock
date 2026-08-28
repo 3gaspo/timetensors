@@ -2304,61 +2304,6 @@ wheels = [
 ]
 
 [[package]]
-name = "tabpfn"
-version = "8.0.8"
-source = { registry = "https://nexus.retd.edf.fr/repository/pypi-all/simple" }
-dependencies = [
-    { name = "einops" },
-    { name = "filelock" },
-    { name = "huggingface-hub" },
-    { name = "joblib" },
-    { name = "lightgbm" },
-    { name = "mlx", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
-    { name = "numpy", version = "2.2.6", source = { registry = "https://nexus.retd.edf.fr/repository/pypi-all/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://nexus.retd.edf.fr/repository/pypi-all/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "pandas", version = "2.3.3", source = { registry = "https://nexus.retd.edf.fr/repository/pypi-all/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "pandas", version = "3.0.3", source = { registry = "https://nexus.retd.edf.fr/repository/pypi-all/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-    { name = "safetensors" },
-    { name = "scikit-learn", version = "1.7.2", source = { registry = "https://nexus.retd.edf.fr/repository/pypi-all/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "scikit-learn", version = "1.9.0", source = { registry = "https://nexus.retd.edf.fr/repository/pypi-all/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "scipy", version = "1.15.3", source = { registry = "https://nexus.retd.edf.fr/repository/pypi-all/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "scipy", version = "1.17.1", source = { registry = "https://nexus.retd.edf.fr/repository/pypi-all/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "tabpfn-common-utils" },
-    { name = "torch" },
-    { name = "tqdm" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://nexus.retd.edf.fr/repository/pypi-all/packages/tabpfn/8.0.8/tabpfn-8.0.8.tar.gz", hash = "sha256:0bdbc438f2920fb98232a136ee79e01d06499f3883491704ddae332d205e7a43" }
-wheels = [
-    { url = "https://nexus.retd.edf.fr/repository/pypi-all/packages/tabpfn/8.0.8/tabpfn-8.0.8-py3-none-any.whl", hash = "sha256:b6c945c8bf23b86f595697fcfa4ce58d84105441baf7e1313edc7865d7d29658" },
-]
-
-[[package]]
-name = "tabpfn-common-utils"
-version = "0.2.21"
-source = { registry = "https://nexus.retd.edf.fr/repository/pypi-all/simple" }
-dependencies = [
-    { name = "filelock" },
-    { name = "numpy", version = "2.2.6", source = { registry = "https://nexus.retd.edf.fr/repository/pypi-all/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://nexus.retd.edf.fr/repository/pypi-all/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "nvidia-ml-py" },
-    { name = "pandas", version = "2.3.3", source = { registry = "https://nexus.retd.edf.fr/repository/pypi-all/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "pandas", version = "3.0.3", source = { registry = "https://nexus.retd.edf.fr/repository/pypi-all/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "platformdirs" },
-    { name = "posthog" },
-    { name = "requests" },
-    { name = "scikit-learn", version = "1.7.2", source = { registry = "https://nexus.retd.edf.fr/repository/pypi-all/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "scikit-learn", version = "1.9.0", source = { registry = "https://nexus.retd.edf.fr/repository/pypi-all/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://nexus.retd.edf.fr/repository/pypi-all/packages/tabpfn-common-utils/0.2.21/tabpfn_common_utils-0.2.21.tar.gz", hash = "sha256:dc4f00c8a5e759fa91210eb19adfebe201ec49edc354075fe6e65031b0f76053" }
-wheels = [
-    { url = "https://nexus.retd.edf.fr/repository/pypi-all/packages/tabpfn-common-utils/0.2.21/tabpfn_common_utils-0.2.21-py3-none-any.whl", hash = "sha256:480b2f24a6150bc10a49485ca5e88885ffa476499ddc3d0c5f8080b379955cb9" },
-]
-
-[[package]]
 name = "threadpoolctl"
 version = "3.6.0"
 source = { registry = "https://nexus.retd.edf.fr/repository/pypi-all/simple" }
@@ -2383,7 +2328,6 @@ dependencies = [
     { name = "scikit-learn", version = "1.7.2", source = { registry = "https://nexus.retd.edf.fr/repository/pypi-all/simple" }, marker = "python_full_version < '3.11'" },
     { name = "scikit-learn", version = "1.9.0", source = { registry = "https://nexus.retd.edf.fr/repository/pypi-all/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "seaborn" },
-    { name = "tabpfn" },
     { name = "torch" },
 ]
 
@@ -2396,7 +2340,6 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.2.3" },
     { name = "scikit-learn", specifier = ">=1.5.0" },
     { name = "seaborn", specifier = ">=0.13.2" },
-    { name = "tabpfn", specifier = ">=6.3.1" },
     { name = "torch", specifier = "==2.5.1" },
 ]
 

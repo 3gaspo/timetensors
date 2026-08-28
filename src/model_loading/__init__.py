@@ -38,10 +38,9 @@ from .sklinear import SkLinearForecaster, iter_loader_xy
 from external_models import (
     Chronos2,
     ChronosBolt,
+    ChronosT5,
     DLinear,
     PatchTST,
-    TabPFNTS,
-    TiRex2Forecaster,
     TSICLForecaster,
 )
 
@@ -49,6 +48,7 @@ __all__ = [
     "FOUNDATION_MODEL_ALIASES",
     "Chronos2",
     "ChronosBolt",
+    "ChronosT5",
     "CovariateAugmentation",
     "DLinear",
     "ExpectedBaseline",
@@ -71,8 +71,6 @@ __all__ = [
     "SkLinearForecaster",
     "StandardNormalization",
     "TanhNormalization",
-    "TabPFNTS",
-    "TiRex2Forecaster",
     "TSICLForecaster",
     "TimeTensorModel",
     "build_model_from_config",

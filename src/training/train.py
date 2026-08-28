@@ -6,30 +6,20 @@ import logging
 from pathlib import Path
 from typing import Any, Mapping
 
-from data import fetch_training_data, get_sizes
+from data import get_sizes
 from data.load import build_dataset_stage
 from model_loading import load_model
 from pipeline.runtime import (
     batch_size,
     config_bool,
-    dataset_path,
-    default_sampling,
-    default_splits,
-    default_subsets,
     device,
     model_specs,
     pretrained_path,
-    recompute_stats,
-    rebuild_dataset,
     run_dir,
     save_torch,
     section,
     seed,
     setup_logging,
-    stats_eps,
-    stats_max_windows,
-    stats_seed,
-    task_shape,
     to_plain_config,
 )
 from visualization.experiment_plots import save_linear_weight_plots
@@ -52,24 +42,8 @@ def _log_loader_sizes(loaders: Mapping[str, Any]) -> None:
 
 
 def fetch_loaders(config: Mapping[str, Any]) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
-    lags, horizon = task_shape(config)
-    data_cfg = section(config, "data")
-    return fetch_training_data(
-        dataset_path(config),
-        default_splits(config),
-        default_sampling(config),
-        default_subsets(config),
-        batch_size(config),
-        lags,
-        horizon,
-        seed=seed(config),
-        stats_save_path=run_dir(config) / "dataset_artifacts",
-        compute_stats=recompute_stats(config),
-        stats_max_windows=stats_max_windows(config),
-        stats_seed=stats_seed(config),
-        stats_eps=stats_eps(config),
-        legacy_context_kind=data_cfg.get("legacy_context_kind"),
-    )
+    built = build_dataset_stage(config)
+    return built["loaders"], built.get("stats", {})
 
 
 def train_stage(
@@ -81,12 +55,7 @@ def train_stage(
     """Train a model and save state/history artifacts."""
     config = to_plain_config(config)
     if loaders is None:
-        if rebuild_dataset(config):
-            built = build_dataset_stage(config)
-            loaders = built.get("loaders")
-            stats = built.get("stats")
-        else:
-            loaders, stats = fetch_loaders(config)
+        loaders, stats = fetch_loaders(config)
     assert loaders is not None
     shape = tuple(get_sizes(loaders))
     specs = model_specs(config, shape)

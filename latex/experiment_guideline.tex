@@ -53,7 +53,7 @@
 
 \title{\vspace{-1.5em}\textbf{TimeTensors: Forecasting Benchmark}\\[2mm]\large Experiment Guideline\vspace{-0.4em}}
 \author{Gaspard Berthelier}
-\date{25 August 2026}
+\date{27 August 2026}
 
 \begin{document}
 \maketitle
@@ -366,9 +366,8 @@ MSE whenever those losses are evaluated.
 \section{Experiment 8: frozen foundation models}
 \label{sec:foundation}
 
-The eighth family evaluates five frozen adapters without optimizer updates:
-Chronos-2, Chronos-Bolt, TS-ICL, and TabPFN-TS. TiRex-2 remains implemented but
-is excluded from the launcher until explicitly restored. Every active adapter receives
+The eighth family evaluates four frozen adapters without optimizer updates:
+Chronos-2, Chronos-Bolt, Chronos-T5, and TS-ICL. Every adapter receives
 the same TimeTensors query rows and writes the aligned five-metric loss
 contract. Model-native preprocessing and released checkpoint inference remain
 inside each official package; the evaluator only constrains accessible data,
@@ -423,8 +422,17 @@ Full and ultra use
 and seeds $\{1,2,3\}$. Test mode uses only Electricity at $(504,168)$ with
 seed 1. A dataset's sibling \code{config.json} is loaded during tensor
 construction: portable top-level options are applied first, the
-\code{timetensors} object overrides them, explicit run values override both,
-and all \code{drop_users} lists are merged additively.
+\code{timetensors} object overrides them, and explicit run values override
+both. For \code{drop_users}, null inherits, an empty list retains every CSV
+user, and a nonempty run list replaces the configured default. Exclusions are
+applied only while reading CSV.
+
+Prepared tensors live under the project's
+\path{datasets/prepared/dataset/signature/}. The signature contains only the
+effective tensor-building configuration; every complete variant has a version-1
+\path{dataset_manifest.json} with source provenance, effective preparation
+settings, shapes, and artifact inventory. Tensor loading never reapplies user
+exclusions.
 
 Filtered TIME panels are prepared by \code{python -m scripts.prepare_time_csv}.
 The shared implementation selects an immutable
@@ -452,14 +460,13 @@ Code name & Implemented forecast & Fit in this project \\
 \code{patchtst} & Patches of length 16 and stride 8; three encoder layers, 16 heads, $d_{\rm model}=128$, $d_{\rm ff}=256$, learned positional encoding, and a flattened forecast head. & Adam \\
 \code{chronos2} & Thin official Chronos-2 adapter; TimeTensorModel may add configured covariates without changing this alias. & Frozen \\
 \code{chronos_bolt} & Thin official Chronos-Bolt adapter; non-empty covariates are rejected. & Frozen \\
+\code{chronos_t5} & Official Chronos-T5 sampling pipeline with the median sample forecast. & Frozen \\
 \code{ts_icl} & Official TS-ICL checkpoint and native preprocessing through a tensor adapter. & Frozen \\
-\code{tirex2} & Official TiRex-2 checkpoint, native preprocessing, and test-time augmentation through a tensor adapter. & Frozen \\
-\code{tabpfn_ts} & In-context TabPFN-TS inference through the official TabPFN package and checkpoint. & Frozen \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-These five foundation names are the sole lower-snake-case aliases shared with
+These four foundation names are the sole lower-snake-case aliases shared with
 TSFM evaluation and online adaptation. Project wrappers compose around the
 same basic adapters and are configured independently of model identity.
 
@@ -477,7 +484,7 @@ Revision: \texttt{204c21efe0b39603ad6e2ca640ef5896646ab1a9}\\[2pt]
 DLinear upstream: \texttt{cure-lab/LTSF-Linear}\\
 Revision: \texttt{0c113668a3b88c4c4ee586b8c5ec3e539c4de5a6}
 \end{flushleft}
-The five frozen evaluation
+The four frozen evaluation
 adapters and TIME preparation implementation are byte-identical to TSFM
 Evaluation and Online Adaptation.
 
@@ -513,7 +520,7 @@ loss artifact.
 
 \subsection{Result identities and manifests}
 Every family continues below the selected output root as
-\code{family/dataset/L_H/backbone/configs/run_n/seed_n}. The ordered
+\path{family/dataset/L_H/backbone/configs/run_n/seed_n}. The ordered
 model-config folders are: \code{policy} for constants;
 \code{sampling_mode/batch_size} for sampling; \code{normalization} for
 normalizations; \code{loss} for losses; \code{normalization/loss} for the
@@ -561,9 +568,11 @@ terminal state, including failure, cancellation, or timeout, the user runs
 \code{bash publish_job.sh <job-id>} from the project root. The script verifies
 \code{main}, sources \code{$HOME/codes/proxy.sh} (or
 \code{PROXY_SCRIPT_PATH}), and fast-forward pulls \code{origin/main} before
-artifact selection or staging. With a job ID, it commits only that job's exact
-stdout/stderr pair. Omitting the job ID publishes all logs and lightweight
-outputs, excluding \code{*.pt}, \code{*.npy}, and \code{*.cbm}. It then pushes
+artifact selection or staging. Lightweight publication selects the exact
+local or Selena stdout/stderr pair when a job ID is supplied, all log trees
+otherwise, and only aggregate \path{outputs*/reports/} artifacts. Detailed
+publication adds all non-binary outputs and diagnostics. Both tiers exclude
+\code{*.pt}, \code{*.npy}, and \code{*.cbm}. The script then pushes
 \code{origin/main} without opening a pull request. A
 non-fast-forward pull stops without a merge commit, and unrelated staged paths
 remain outside the publisher commit.

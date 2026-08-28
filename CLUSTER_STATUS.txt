@@ -31,6 +31,9 @@ NEXT JOBS
    full/ultra profile after artifact inspection.
 
 No Selena front or transfer has yet been exercised on the clusters.
+Result synchronization must run on DGX as an inbound Selena pull. An unscoped
+publisher run includes the paired Selena artifact trees under the standard
+lightweight exclusions.
 
 HISTORICAL CONTEXT
 - Earlier pre-schema and schema-1 runs, including job 42527, are historical

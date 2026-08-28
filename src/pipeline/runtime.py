@@ -109,11 +109,6 @@ def ensure_dir(path: str | Path) -> Path:
     return path
 
 
-def dataset_path(config: Mapping[str, Any]) -> Path:
-    data = section(config, "data")
-    return Path(data.get("path", "run/dataset")).expanduser()
-
-
 def output_dir(config: Mapping[str, Any]) -> Path:
     output = section(config, "output")
     return ensure_dir(output.get("dir", "outputs/manual_debug"))

@@ -31,10 +31,9 @@ from proposal.normalizations import build_normalization
 from external_models import (
     Chronos2,
     ChronosBolt,
+    ChronosT5,
     DLinear,
     PatchTST,
-    TabPFNTS,
-    TiRex2Forecaster,
     TSICLForecaster,
 )
 
@@ -42,21 +41,27 @@ from external_models import (
 FOUNDATION_MODEL_ALIASES = (
     "chronos2",
     "chronos_bolt",
+    "chronos_t5",
     "ts_icl",
-    "tirex2",
-    "tabpfn_ts",
 )
 REMOVED_FOUNDATION_ALIASES = {
     "chronos",
     "chronos-2",
     "chronos-bolt",
+    "chronos-t5",
     "tsicl",
     "ts-icl",
+    "tirex2",
     "tirex_2",
     "tirex-2",
     "tyrex2",
+    "tabpfn_ts",
     "tabpfn",
     "tabpfn-ts",
+}
+REMOVED_FOUNDATION_PATHS = {
+    "external_models.tabpfn.TabPFNTS",
+    "external_models.tabpfn:TabPFNTS",
 }
 
 
@@ -71,9 +76,8 @@ BASELINE_REGISTRY = {
     "patchtst": PatchTST,
     "chronos2": Chronos2,
     "chronos_bolt": ChronosBolt,
-    "tabpfn_ts": TabPFNTS,
+    "chronos_t5": ChronosT5,
     "ts_icl": TSICLForecaster,
-    "tirex2": TiRex2Forecaster,
 }
 
 
@@ -375,6 +379,8 @@ def build_base_model(config: ModelConfig) -> nn.Module:
     path_key = path.lower()
     if name_key in REMOVED_FOUNDATION_ALIASES or path_key in REMOVED_FOUNDATION_ALIASES:
         raise ValueError("removed foundation-model alias; use the canonical snake_case name")
+    if path in REMOVED_FOUNDATION_PATHS:
+        raise ValueError("retired foundation adapter is not runnable")
     if name_key in FOUNDATION_MODEL_ALIASES or path_key in FOUNDATION_MODEL_ALIASES:
         if name != path or name != name_key:
             raise ValueError(

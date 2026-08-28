@@ -1,4 +1,4 @@
-"""Thin in-context adapter around the official TabPFN regressor."""
+"""Retained, unregistered historical TabPFN adapter."""
 
 from __future__ import annotations
 
