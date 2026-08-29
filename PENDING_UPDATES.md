@@ -1,5 +1,14 @@
 # Pending updates
 
+- 2026-08-29: Standardized raw and TIME CSV missing-value handling and made
+  prepared-cache loads finite-only. NaNs default to zero after aggregation,
+  `error` rejects them, and infinity is always rejected. README, architecture,
+  and guideline now state the contract. The focused configuration/loader
+  check and documentation validator passed; the eight-page guideline was
+  rebuilt and visually inspected. Deferred integration: publish the code;
+  finite prepared variants remain reusable, while a non-finite cache must be
+  rebuilt and its dependent runs rerun.
+
 - 2026-08-28: Reconciled the five-view documentation contract by reducing the
   public README to a 109-line goal/setup/execution quickstart and leaving the
   formal benchmark, architecture, eight numbered families, protocol, and
@@ -34,7 +43,7 @@
   synchronize the prepared cluster environment and rerun family 8; other
   benchmark families do not require reruns solely for this model-axis change.
 
-Last successful maintenance: 2026-08-11 10:45 +02:00.
+Last successful maintenance: 2026-08-29 00:26 +02:00.
 
 ## Pending
 
@@ -422,4 +431,3 @@ pending.
   failed cluster job; no experiment was launched locally.
 - README/LaTeX and reruns: public and scientific behavior are unchanged, so no
   documentation update or additional rerun is required.
-

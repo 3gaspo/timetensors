@@ -12,12 +12,32 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from pipeline.runtime import batch_size, default_sampling, model_specs
+from data.io import fetch_csv
 from data.load import _merge_dataset_config
 from training.losses import get_losses
 from training.pipeline import LearnerConfig
 
 
 def main() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        (root / "tiny.csv").write_text("date,a\n2026-01-01,1\n2026-01-02,\n")
+        values, _, _ = fetch_csv(root, "tiny", date_col="date")
+        assert float(values.iloc[1, 0]) == 0.0
+        try:
+            fetch_csv(root, "tiny", date_col="date", missing_values="error")
+        except ValueError as error:
+            assert "missing values" in str(error)
+        else:
+            raise AssertionError("strict missing-value policy must reject NaNs")
+        (root / "tiny.csv").write_text("date,a\n2026-01-01,1\n2026-01-02,inf\n")
+        try:
+            fetch_csv(root, "tiny", date_col="date")
+        except ValueError as error:
+            assert "infinite values" in str(error)
+        else:
+            raise AssertionError("CSV infinities must be rejected")
+
     criterion, eval_losses = get_losses()
     assert criterion.name == "nmse"
     assert {"mse", "nmse"} <= set(eval_losses)

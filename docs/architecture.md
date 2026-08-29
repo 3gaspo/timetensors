@@ -37,6 +37,8 @@ flowchart LR
 ## Important boundaries
 
 - Dataset preparation applies exclusions once; tensor consumers never repeat it.
+- CSV NaNs are zero-filled by default after aggregation; `missing_values=error`
+  rejects them. Infinite raw values and non-finite prepared caches are rejected.
 - A family varies only its declared treatment while common training controls
   remain fixed.
 - Proposal code does not import Slurm, manifests, results, or plotting.

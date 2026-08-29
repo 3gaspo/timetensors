@@ -32,6 +32,7 @@ def fetch_csv(
     rename_cols: Optional[Mapping[str, str]] = None,
     aggr: Optional[str] = None,
     aggr_period: str = "h",
+    missing_values: str = "zero",
     users_dim: int = 1,
     date_col: Optional[str] = None,
     dates: Optional[Sequence[Any]] = None,
@@ -130,6 +131,13 @@ def fetch_csv(
 
     values_df.columns = [f"serie_{source_id}" for source_id in source_ids]
 
+    source_frames = [values_df] + ([] if global_context_df is None else [global_context_df])
+    source_infinite_count = sum(
+        int(np.isinf(frame.to_numpy(dtype=float)).sum()) for frame in source_frames
+    )
+    if source_infinite_count:
+        raise ValueError(f"dataset contains {source_infinite_count} infinite values")
+
     if aggr is not None:
         if not isinstance(values_df.index, pd.DatetimeIndex):
             raise ValueError(
@@ -156,6 +164,24 @@ def fetch_csv(
                 global_context_df = getattr(
                     global_context_df.resample(aggr_period), reducer
                 )()
+
+    missing_values = str(missing_values or "zero").lower()
+    if missing_values not in {"zero", "error"}:
+        raise ValueError("missing_values must be 'zero' or 'error'")
+    frames = [values_df] + ([] if global_context_df is None else [global_context_df])
+    missing_count = sum(int(frame.isna().sum().sum()) for frame in frames)
+    if missing_count and missing_values == "error":
+        raise ValueError(f"dataset contains {missing_count} missing values")
+    if missing_count:
+        values_df = values_df.fillna(0.0)
+        if global_context_df is not None:
+            global_context_df = global_context_df.fillna(0.0)
+    final_frames = [values_df] + ([] if global_context_df is None else [global_context_df])
+    infinite_count = sum(
+        int(np.isinf(frame.to_numpy(dtype=float)).sum()) for frame in final_frames
+    )
+    if infinite_count:
+        raise ValueError(f"dataset contains {infinite_count} infinite values")
 
     result = (values_df, global_context_df, list(values_df.index))
     if not return_metadata:
@@ -224,6 +250,7 @@ def build_dataset(
     rename_cols: Optional[Mapping[str, str]] = None,
     aggr: Optional[str] = None,
     aggr_period: str = "h",
+    missing_values: str = "zero",
     users_dim: int = 1,
     date_col: Optional[str] = None,
     dates: Optional[Sequence[Any]] = None,
@@ -240,6 +267,7 @@ def build_dataset(
         rename_cols=rename_cols,
         aggr=aggr,
         aggr_period=aggr_period,
+        missing_values=missing_values,
         users_dim=users_dim,
         date_col=date_col,
         dates=dates,

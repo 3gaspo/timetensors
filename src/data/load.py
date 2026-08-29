@@ -55,6 +55,7 @@ DATASET_CONFIG_KEYS = {
     "rename_cols",
     "aggr",
     "aggr_period",
+    "missing_values",
     "users_dim",
     "date_col",
     "dates",
@@ -69,6 +70,7 @@ PREPARATION_KEYS = (
     "rename_cols",
     "aggr",
     "aggr_period",
+    "missing_values",
     "users_dim",
     "date_col",
     "dates",
@@ -205,6 +207,7 @@ def _preparation_config(data_cfg: Mapping[str, Any], logical_name: str) -> dict[
         "rename_cols": None,
         "aggr": None,
         "aggr_period": "h",
+        "missing_values": "zero",
         "users_dim": 1,
         "date_col": None,
         "dates": None,
@@ -217,7 +220,10 @@ def _preparation_config(data_cfg: Mapping[str, Any], logical_name: str) -> dict[
 
 
 def _signature(config: Mapping[str, Any]) -> str:
-    payload = json.dumps(config, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    identity = dict(config)
+    if identity.get("missing_values") == "zero":
+        identity.pop("missing_values")
+    payload = json.dumps(identity, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -351,6 +357,9 @@ def build_dataset_stage(config: Mapping[str, Any]) -> dict[str, Any]:
                 legacy_context_kind=data_cfg.get("legacy_context_kind"),
             )
             reusable = _serialized_pt_shapes(data, prefix) == manifest["pt_shapes"]
+            reusable = reusable and torch.isfinite(data.values).all().item()
+            if data.global_context is not None:
+                reusable = reusable and torch.isfinite(data.global_context).all().item()
         except Exception as exc:
             LOGGER.warning("prepared tensor validation failed path=%s error=%s", out_path, exc)
             reusable = False
@@ -373,6 +382,7 @@ def build_dataset_stage(config: Mapping[str, Any]) -> dict[str, Any]:
             rename_cols=preparation["rename_cols"],
             aggr=preparation["aggr"],
             aggr_period=str(preparation["aggr_period"]),
+            missing_values=str(preparation["missing_values"]),
             users_dim=int(preparation["users_dim"]),
             date_col=preparation["date_col"],
             dates=preparation["dates"],

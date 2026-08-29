@@ -32,7 +32,9 @@ export PYTHONPATH=src
 Raw wide CSVs belong under `datasets/<name>/`; prepared variants are created
 under `datasets/prepared/<dataset>/<signature>/`. Foundation checkpoints
 belong under `weights/`. An adjacent `config.json` owns portable target,
-exclusion, date, orientation, rename, and aggregation settings.
+exclusion, date, orientation, rename, aggregation, and missing-value settings.
+`missing_values` defaults to `zero`; `error` rejects NaNs after aggregation,
+and infinite values are always rejected. Prepared caches are finite-only.
 
 ## Main executions
 

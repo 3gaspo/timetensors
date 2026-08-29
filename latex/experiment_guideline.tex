@@ -53,7 +53,7 @@
 
 \title{\vspace{-1.5em}\textbf{TimeTensors: Forecasting Benchmark}\\[2mm]\large Experiment Guideline\vspace{-0.4em}}
 \author{Gaspard Berthelier}
-\date{27 August 2026}
+\date{29 August 2026}
 
 \begin{document}
 \maketitle
@@ -425,7 +425,10 @@ construction: portable top-level options are applied first, the
 \code{timetensors} object overrides them, and explicit run values override
 both. For \code{drop_users}, null inherits, an empty list retains every CSV
 user, and a nonempty run list replaces the configured default. Exclusions are
-applied only while reading CSV.
+applied only while reading CSV. After aggregation, \code{missing_values}
+defaults to \code{zero}, replacing NaNs with zero; \code{error} rejects
+them, and infinite values are always rejected. Prepared tensors are also
+validated as finite when they are loaded.
 
 Prepared tensors live under the project's
 \path{datasets/prepared/dataset/signature/}. The signature contains only the
