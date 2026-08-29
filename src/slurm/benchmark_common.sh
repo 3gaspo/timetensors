@@ -1,6 +1,23 @@
 #!/bin/bash
 # Shared TimeTensors resource resolution, configuration, launch, and table helpers.
 
+log() { printf '%s %s\n' "$(date -Is)" "$*"; }
+log_section() { printf '\n%s %s\n' "$(date -Is)" "$*"; }
+log_error() { printf '%s %s\n' "$(date -Is)" "$*" >&2; }
+
+bootstrap_on_exit() {
+  local status=$?
+  trap - EXIT
+  if [ "$status" -eq 0 ]; then
+    log_section "workflow completed status=success exit_code=0"
+  else
+    log_error "workflow completed status=failed exit_code=$status"
+  fi
+  exit "$status"
+}
+
+trap bootstrap_on_exit EXIT
+
 ROOT="${SLURM_SUBMIT_DIR:-$(pwd)}"
 cd "$ROOT"
 LOGS_ROOT="${LOGS_ROOT:-$ROOT/logs}"
@@ -9,10 +26,6 @@ PREPARED_DATA_ROOT="${PREPARED_DATA_ROOT:-$ROOT/datasets/prepared}"
 mkdir -p "$LOGS_ROOT" "$OUTPUTS_ROOT" "$PREPARED_DATA_ROOT"
 source .venv/bin/activate
 export PYTHONPATH="$ROOT/src"
-
-log() { printf '%s %s\n' "$(date -Is)" "$*"; }
-log_section() { printf '\n%s %s\n' "$(date -Is)" "$*"; }
-log_error() { printf '%s %s\n' "$(date -Is)" "$*" >&2; }
 
 # Storage may be project-local or in a shared parent directory. Set DATA_ROOT
 # and WEIGHTS_ROOT explicitly on another machine, or edit these candidates.
