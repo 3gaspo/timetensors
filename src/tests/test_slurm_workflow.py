@@ -185,5 +185,18 @@ class SlurmWorkflowTest(unittest.TestCase):
         self.assertTrue((ROOT / "archive/retired_external_models/tirex2.py").is_file())
 
 
+class TerminalCompletionContractTest(unittest.TestCase):
+    def test_tasks_stages_and_workflow_have_terminal_markers(self) -> None:
+        common = (ROOT / "src/slurm/benchmark_common.sh").read_text(encoding="utf-8")
+        self.assertIn("task $ACTIVE_TASK completed status=$status", common)
+        self.assertIn("completed status=failed exit_code=$status", common)
+        self.assertIn("workflow completed status=success exit_code=0", common)
+        self.assertIn("workflow completed status=failed exit_code=$status", common)
+        for name in ("train", "evaluate", "tables"):
+            stage = (ROOT / f"src/slurm/stage_{name}.sh").read_text(encoding="utf-8")
+            self.assertIn(f"stage_start {name}", stage)
+            self.assertIn("stage_complete", stage)
+
+
 if __name__ == "__main__":
     unittest.main()

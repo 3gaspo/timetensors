@@ -3,7 +3,7 @@
 # marker. The sourced family orchestrator defines the table inputs and outputs.
 
 if stage_requested tables; then
-  log_section "stage start name=tables"
+  stage_start tables
   run_tables
   for required in "${TABLE_REQUIRED_OUTPUTS[@]}"; do
     if [ ! -s "$required" ]; then
@@ -11,7 +11,7 @@ if stage_requested tables; then
       exit 1
     fi
   done
-  log_section "stage done name=tables"
+  stage_complete
 else
   log "stage skip name=tables reason=not_requested"
 fi

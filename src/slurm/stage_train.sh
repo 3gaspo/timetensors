@@ -3,9 +3,9 @@
 # defines stage_requested, log_section, and run_training.
 
 if stage_requested train; then
-  log_section "stage start name=train"
+  stage_start train
   run_training
-  log_section "stage done name=train"
+  stage_complete
 else
   log "stage skip name=train reason=not_requested"
 fi

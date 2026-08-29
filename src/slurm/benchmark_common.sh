@@ -59,15 +59,52 @@ TABLE_REPEAT_POLICY="${TABLE_REPEAT_POLICY:-selected}"
 if [ "$EXPERIMENT_MODE" = test ]; then TABLE_PURPOSE="${TABLE_PURPOSE:-smoke}"; else TABLE_PURPOSE="${TABLE_PURPOSE:-publication}"; fi
 EXPERIMENT_LAUNCH_ID="${EXPERIMENT_LAUNCH_ID:-${SLURM_JOB_ID:-manual_$(date -u '+%Y%m%dT%H%M%SZ')_$$}}"
 export EXPERIMENT_LAUNCH_ID
+ACTIVE_STAGE=""
+ACTIVE_TASK=""
+TASK_INDEX=0
+
+stage_start() {
+  ACTIVE_STAGE="$1"
+  log_section "stage $ACTIVE_STAGE started"
+}
+
+stage_complete() {
+  log_section "stage $ACTIVE_STAGE completed status=success"
+  ACTIVE_STAGE=""
+}
+
+task_start() {
+  TASK_INDEX=$((TASK_INDEX + 1))
+  ACTIVE_TASK="$TASK_INDEX $*"
+  log "task $ACTIVE_TASK started"
+}
+
+task_complete() {
+  local status="$1"
+  log "task $ACTIVE_TASK completed status=$status"
+  ACTIVE_TASK=""
+}
+
 timetensors_on_exit() {
   local status=$?
   trap - EXIT
+  if [ -n "$ACTIVE_TASK" ]; then
+    log_error "task $ACTIVE_TASK completed status=failed exit_code=$status"
+  fi
+  if [ -n "$ACTIVE_STAGE" ]; then
+    log_error "stage $ACTIVE_STAGE completed status=failed exit_code=$status"
+  fi
   if [ "$status" -ne 0 ]; then
     python -m pipeline.runs interrupt-launch --root "$OUTPUTS_ROOT" --launch-id "$EXPERIMENT_LAUNCH_ID" || true
-    elif python -m pipeline.runs complete-launch --root "$OUTPUTS_ROOT" --launch-id "$EXPERIMENT_LAUNCH_ID" >/dev/null; then
-      :
-    else
-      status=$?
+  elif python -m pipeline.runs complete-launch --root "$OUTPUTS_ROOT" --launch-id "$EXPERIMENT_LAUNCH_ID" >/dev/null; then
+    :
+  else
+    status=$?
+  fi
+  if [ "$status" -eq 0 ]; then
+    log_section "workflow completed status=success exit_code=0"
+  else
+    log_error "workflow completed status=failed exit_code=$status"
   fi
   exit "$status"
 }
@@ -169,6 +206,7 @@ run_case() {
   local case_data_root config_path seed seed_root run_seeds_csv identity_root pair value
   local run_dir run_action run_signature purpose effective_batch
   local -a allocation_args pending_seeds required_artifacts
+  task_start "configuration dataset=$dataset setting=$setting backbone=$backbone model_configs=${MODEL_CONFIG_VALUES[*]:-none}"
   : "${FAMILY:?family launcher must set FAMILY}"
   : "${MODEL_CONFIG_ORDER:=}"
   : "${TABLE_ROW_CONFIG:=}"
@@ -201,6 +239,9 @@ run_case() {
     --policy "$RUN_CONFLICT_POLICY" --skip-completed "$SKIP_COMPLETED"
     --force "$FORCE_RUN" --launch-id "$EXPERIMENT_LAUNCH_ID"
   )
+  if [ "${dataset,,}" = weather ]; then
+    allocation_args+=(--pipeline-config "data.missing_values=zero")
+  fi
   for pair in "${MODEL_CONFIG_VALUES[@]}"; do allocation_args+=(--model-config "$pair"); done
   for seed in "${SEEDS[@]}"; do allocation_args+=(--seed "$seed"); done
   if [ -f "$config_path" ]; then allocation_args+=(--input "dataset_config=$config_path"); fi
@@ -208,6 +249,7 @@ run_case() {
   IFS=$'\t' read -r run_dir run_action run_signature < <(python -m pipeline.runs allocate "${allocation_args[@]}")
   if [ "$run_action" = skip ]; then
     log "skip complete dataset=$dataset lags=$lags horizon=$horizon backbone=$backbone model_configs=${MODEL_CONFIG_VALUES[*]:-none} run=$run_dir"
+    task_complete skipped
     return
   fi
   run_seeds_csv="$(python -m pipeline.runs pending-seeds --run-dir "$run_dir")"
@@ -267,6 +309,7 @@ run_case() {
   for seed in "${SEEDS[@]}"; do required_artifacts+=(--artifact "seed_$seed/all_losses.pt"); done
   python -m pipeline.runs ready --run-dir "$run_dir" "${required_artifacts[@]}"
   python -m pipeline.runs complete --run-dir "$run_dir" --launch-id "$EXPERIMENT_LAUNCH_ID"
+  task_complete success
   unset CASE_BATCH_SIZE CASE_DISPLAY_NAME
   MODEL_CONFIG_VALUES=()
 }
@@ -276,6 +319,7 @@ write_table() {
   local pair
   local -a table_args
   log_section "table model=$model metric=$metric methods=$methods output=$OUT_ROOT/results_${model}_${metric}.tex"
+  task_start "table model=$model metric=$metric"
   table_args=(
     "$OUT_ROOT" --split test1 --metric "$metric"
     --datasets "$DATASETS_CSV" --settings "$SETTINGS_CSV"
@@ -288,6 +332,7 @@ write_table() {
   fi
   if [ -n "${TABLE_PURPOSE:-}" ]; then table_args+=(--purpose "$TABLE_PURPOSE"); fi
   srun --ntasks=1 python -m scripts.report "${table_args[@]}"
+  task_complete success
 }
 
 verify_table_inputs() {

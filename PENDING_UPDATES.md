@@ -409,3 +409,17 @@ pending.
 - README/LaTeX and reruns: README and guideline source document the compact
   default; re-render the guideline during maintenance. No additional
   scientific rerun is caused by the transfer change.
+
+## 2026-08-29 — Terminal Slurm completion records
+
+- Behavior and affected contracts: each TimeTensors run/table subtask, each
+  requested stage, and the final exit trap now emit explicit terminal states;
+  the workflow marker is written after launch-manifest completion or
+  interruption handling.
+- Focused check completed: `src/tests/test_slurm_workflow.py` passed (6 tests)
+  in the shared thesis runtime.
+- Deferred integration: observe the new markers in one successful and one
+  failed cluster job; no experiment was launched locally.
+- README/LaTeX and reruns: public and scientific behavior are unchanged, so no
+  documentation update or additional rerun is required.
+
